@@ -194,7 +194,7 @@ const RegisterEmpresa = () => {
       <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md space-y-4">
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">CUIT/CUIL *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">CUIT/CUIL <span className="text-red-500">*</span></label>
             <Input
               placeholder="Ej: 20123456789"
               value={empresaCuit}
@@ -204,7 +204,7 @@ const RegisterEmpresa = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la empresa *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la empresa <span className="text-red-500">*</span></label>
             <Input
               placeholder="Ej: Transportes López"
               value={empresaNombre}
@@ -213,7 +213,7 @@ const RegisterEmpresa = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Razón social (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Razón social</label>
             <Input
               placeholder="Ej: Transportes López S.A."
               value={empresaRazonSocial}
@@ -221,7 +221,7 @@ const RegisterEmpresa = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
             <Input
               placeholder="Ej: 011 1234-5678"
               value={empresaTelefono}

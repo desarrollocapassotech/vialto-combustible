@@ -182,7 +182,7 @@ const EmpresasManagement = () => {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">CUIT/CUIL *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CUIT/CUIL <span className="text-red-500">*</span></label>
               <Input
                 value={cuit}
                 onChange={(e) => setCuit(e.target.value.replace(/\D/g, "").slice(0, 11))}
@@ -192,7 +192,7 @@ const EmpresasManagement = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nombre <span className="text-red-500">*</span></label>
               <Input
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
@@ -201,7 +201,7 @@ const EmpresasManagement = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Razón social (opcional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Razón social</label>
               <Input
                 value={razonSocial}
                 onChange={(e) => setRazonSocial(e.target.value)}
@@ -209,7 +209,7 @@ const EmpresasManagement = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
               <Input
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
