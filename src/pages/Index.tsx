@@ -291,29 +291,42 @@ const Index = () => {
   const handleNewLoad = async (data: any) => {
     try {
       if (userRole === "CHOFER") {
-        // T5: guardar carga en Vialto (PostgreSQL vía API backend)
         const token = localStorage.getItem("vialtoToken");
         if (!token) { navigate("/login"); return; }
         const getToken = async () => token;
-        const created = await apiJson<CargaApi>(
-          "/api/combustible/chofer/cargas",
-          getToken,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              patente: data.licensePlate,
-              estacion: data.serviceStation,
-              litros: data.liters,
-              importe: data.totalAmount,
-              km: data.kilometers,
-              ...(data.paymentMethod ? { formaPago: data.paymentMethod } : {}),
-              fecha: data.date,
-            }),
-          },
-        );
-        setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
-        toast.success("Carga registrada exitosamente");
+        const apiPayload = {
+          patente: data.licensePlate,
+          estacion: data.serviceStation,
+          litros: data.liters,
+          importe: data.totalAmount,
+          km: data.kilometers,
+          ...(data.paymentMethod ? { formaPago: data.paymentMethod } : {}),
+          fecha: data.date,
+        };
+
+        if (editLoad) {
+          // T6: editar carga vía API
+          const updated = await apiJson<CargaApi>(
+            `/api/combustible/chofer/cargas/${editLoad.id}`,
+            getToken,
+            { method: "PATCH", body: JSON.stringify(apiPayload) },
+          );
+          setLoads((prev) =>
+            prev.map((l) => (l.id === editLoad.id ? mapCargaToLoadData(updated) : l))
+          );
+          toast.success("Carga actualizada exitosamente");
+        } else {
+          // T5: crear carga vía API
+          const created = await apiJson<CargaApi>(
+            "/api/combustible/chofer/cargas",
+            getToken,
+            { method: "POST", body: JSON.stringify(apiPayload) },
+          );
+          setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+          toast.success("Carga registrada exitosamente");
+        }
         setIsFormOpen(false);
+        setEditLoad(null);
         return;
       }
 
@@ -352,14 +365,29 @@ const Index = () => {
     }
   };
 
-  // Eliminar una carga
   const handleDeleteLoad = async (id: string) => {
     try {
-      const loadDocRef = doc(db, "cargas", id).withConverter(loadConverter);
-      await deleteDoc(loadDocRef);
+      if (userRole === "CHOFER") {
+        const token = localStorage.getItem("vialtoToken");
+        if (!token) { navigate("/login"); return; }
+        await apiJson<{ deleted: string }>(
+          `/api/combustible/chofer/cargas/${id}`,
+          async () => token,
+          { method: "DELETE" },
+        );
+      } else {
+        const loadDocRef = doc(db, "cargas", id).withConverter(loadConverter);
+        await deleteDoc(loadDocRef);
+      }
       setLoads((prev) => prev.filter((load) => load.id !== id));
       toast.success("Carga eliminada exitosamente");
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("vialtoToken");
+        navigate("/login");
+        return;
+      }
       console.error("Error al eliminar la carga:", error);
       toast.error("Error al eliminar la carga");
     }
