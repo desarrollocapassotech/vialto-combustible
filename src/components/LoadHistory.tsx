@@ -10,210 +10,156 @@ interface LoadHistoryProps {
 
 const ITEMS_PER_PAGE = 10;
 
+const fmtDate = (date: string) =>
+  new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(date));
+
+const fmtNum = (n: number) =>
+  n.toLocaleString("es-ES", { minimumFractionDigits: 0 });
+
+const BtnEdit = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-border bg-card hover:bg-muted transition-colors${fullWidth ? " w-full" : ""}`}
+  >
+    Editar
+  </button>
+);
+
+const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
+  <button
+    type="button"
+    onClick={() => {
+      if (window.confirm("¿Eliminar esta carga?")) onClick();
+    }}
+    className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-destructive/30 bg-card text-destructive hover:bg-destructive/5 transition-colors${fullWidth ? " w-full" : ""}`}
+  >
+    Eliminar
+  </button>
+);
+
 const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
-  // Filtrar las cargas según el término de búsqueda
-  const filteredLoads = loads.filter(
-    (load) =>
-      load.driverName.toLowerCase().includes(filter.toLowerCase()) ||
-      load.licensePlate.toLowerCase().includes(filter.toLowerCase())
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const filtered = loads.filter(
+    (l) =>
+      l.driverName.toLowerCase().includes(filter.toLowerCase()) ||
+      l.licensePlate.toLowerCase().includes(filter.toLowerCase())
   );
 
-  // Si no hay cargas registradas o filtradas, mostrar un mensaje
-  if (filteredLoads.length === 0) {
+  if (filtered.length === 0) {
     return (
-      <div className="text-center text-gray-500 py-8">
+      <p className="text-center text-muted-foreground py-8 text-sm">
         No hay cargas registradas
-      </div>
+      </p>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Vista de tabla para desktop */}
-      <div className="hidden md:block overflow-x-auto">
-        <TableComponent
-          filteredLoads={filteredLoads}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
-      </div>
-
-      {/* Vista de tarjetas para móvil */}
-      <div className="block md:hidden space-y-4">
-        {filteredLoads.map((load) => (
-          <CardItem
-            key={load.id}
-            load={load}
-            onEdit={() => onEdit(load)}
-            onDelete={() => {
-              const isConfirmed = window.confirm(
-                "¿Estás seguro de que deseas eliminar esta carga?"
-              );
-              if (isConfirmed) onDelete(load.id);
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// --- Componentes internos ---
-
-// Tarjeta para móvil
-const CardItem = ({
-  load,
-  onEdit,
-  onDelete,
-}: {
-  load: any;
-  onEdit: () => void;
-  onDelete: () => void;
-}) => (
-  <div className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-    <div className="flex justify-between items-start">
-      <div>
-        <h3 className="font-medium text-gray-900">{load.driverName}</h3>
-        <p className="text-sm text-gray-500">{load.licensePlate}</p>
-      </div>
-      <div className="text-right">
-        <p className="text-sm font-medium text-gray-900">
-          ${load.totalAmount.toLocaleString("es-ES", { minimumFractionDigits: 0 })}
-        </p>
-        <p className="text-sm text-gray-500">
-          {load.liters.toLocaleString("es-ES", { minimumFractionDigits: 0 })} L
-        </p>
-        <p className="text-sm text-gray-500">
-          {load.kilometers.toLocaleString("es-ES", { minimumFractionDigits: 0 })} Km
-        </p>
-      </div>
-    </div>
-    <p className="text-xs text-gray-500 mt-2">
-      {new Intl.DateTimeFormat("es-ES", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(new Date(load.date))}
-    </p>
-    <div className="flex justify-end gap-2 mt-2">
-      <button onClick={onEdit} className="text-blue-600 hover:underline">
-        Editar
-      </button>
-      <button onClick={onDelete} className="text-red-600 hover:underline">
-        Eliminar
-      </button>
-    </div>
-  </div>
-);
-
-// Tabla para desktop
-const TableComponent = ({
-  filteredLoads,
-  onEdit,
-  onDelete,
-}: {
-  filteredLoads: any[];
-  onEdit: (load: any) => void;
-  onDelete: (id: string) => void;
-}) => {
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const totalPages = Math.ceil(filteredLoads.length / ITEMS_PER_PAGE);
-  const paginatedLoads = filteredLoads.slice(
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paged = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  const handlePageChange = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
-  };
-
   return (
-    <>
-      <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
-        <thead className="bg-gray-100 text-left">
-          <tr>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Chofer</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Patente</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Litros</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Km</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Monto</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Fecha</th>
-            <th className="px-4 py-2 text-sm font-semibold text-gray-700">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedLoads.map((load) => (
-            <tr key={load.id} className="border-t hover:bg-gray-50">
-              <td className="px-4 py-2">{load.driverName}</td>
-              <td className="px-4 py-2">{load.licensePlate}</td>
-              <td className="px-4 py-2">
-                {load.liters.toLocaleString("es-ES", { minimumFractionDigits: 0 })} L
-              </td>
-              <td className="px-4 py-2">
-                {load.kilometers.toLocaleString("es-ES", { minimumFractionDigits: 0 })} Km
-              </td>
-              <td className="px-4 py-2">
-                ${load.totalAmount.toLocaleString("es-ES", { minimumFractionDigits: 0 })}
-              </td>
-              <td className="px-4 py-2">
-                {new Intl.DateTimeFormat("es-ES", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(new Date(load.date))}
-              </td>
-              <td className="px-4 py-2 flex gap-2">
-                <button
-                  className="text-blue-600 hover:underline"
-                  onClick={() => onEdit(load)}
-                >
-                  Editar
-                </button>
-                <button
-                  className="text-red-600 hover:underline"
-                  onClick={() => {
-                    const isConfirmed = window.confirm(
-                      "¿Estás seguro de que deseas eliminar esta carga?"
-                    );
-                    if (isConfirmed) onDelete(load.id);
-                  }}
-                >
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {/* ── Cards (mobile-first) ── */}
+      <div className="space-y-3 md:hidden">
+        {paged.map((load) => (
+          <div
+            key={load.id}
+            className="rounded-lg border border-border bg-card p-4 space-y-3"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="font-medium text-sm">{load.driverName}</p>
+                <p className="text-xs text-muted-foreground">{load.licensePlate}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">{fmtDate(load.date)}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Litros</p>
+                <p className="font-medium">{fmtNum(load.liters)} L</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Km</p>
+                <p className="font-medium">{fmtNum(load.kilometers)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Monto</p>
+                <p className="font-medium">${fmtNum(load.totalAmount)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <BtnEdit onClick={() => onEdit(load)} fullWidth />
+              <BtnDelete onClick={() => onDelete(load.id)} fullWidth />
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* Paginación */}
+      {/* ── Tabla (desktop) ── */}
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+        <table className="min-w-full bg-card text-sm">
+          <thead className="bg-muted text-left">
+            <tr>
+              {["Chofer", "Patente", "Litros", "Km", "Monto", "Fecha", ""].map((h) => (
+                <th key={h} className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {paged.map((load) => (
+              <tr key={load.id} className="hover:bg-muted/50">
+                <td className="px-4 py-2.5">{load.driverName}</td>
+                <td className="px-4 py-2.5">{load.licensePlate}</td>
+                <td className="px-4 py-2.5">{fmtNum(load.liters)} L</td>
+                <td className="px-4 py-2.5">{fmtNum(load.kilometers)}</td>
+                <td className="px-4 py-2.5">${fmtNum(load.totalAmount)}</td>
+                <td className="px-4 py-2.5">{fmtDate(load.date)}</td>
+                <td className="px-4 py-2.5">
+                  <div className="flex gap-2">
+                    <BtnEdit onClick={() => onEdit(load)} />
+                    <BtnDelete onClick={() => onDelete(load.id)} />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Paginación ── */}
       {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex justify-between items-center pt-1">
           <button
-            onClick={() => handlePageChange(currentPage - 1)}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            className="text-xs font-medium uppercase tracking-wider px-3 py-1.5 rounded border border-border bg-card hover:bg-muted disabled:opacity-40 transition-colors"
           >
             Anterior
           </button>
-          <span className="text-sm text-gray-600">
-            Página {currentPage} de {totalPages}
+          <span className="text-xs text-muted-foreground">
+            {currentPage} / {totalPages}
           </span>
           <button
-            onClick={() => handlePageChange(currentPage + 1)}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
+            className="text-xs font-medium uppercase tracking-wider px-3 py-1.5 rounded border border-border bg-card hover:bg-muted disabled:opacity-40 transition-colors"
           >
             Siguiente
           </button>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

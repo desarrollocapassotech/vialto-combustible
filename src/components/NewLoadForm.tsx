@@ -200,6 +200,7 @@ const NewLoadForm = ({
 
   return (
     <DialogContent
+      aria-describedby={undefined}
       className="fixed inset-0 z-50 h-dvh w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 flex flex-col gap-0 p-0 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:right-auto sm:bottom-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:grid sm:gap-4 sm:p-6"
     >
       <div className="flex flex-col flex-1 min-h-0 sm:flex-none sm:min-h-0">
@@ -438,7 +439,7 @@ const NewLoadForm = ({
             const isMercosur = showPlateDesign(formData.licensePlate);
             return (
               <div
-                className={`relative overflow-hidden aspect-[2.8/1] max-w-[280px] mx-auto shadow-md ${
+                className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${
                   isMercosur
                     ? "rounded-lg border-2 border-black"
                     : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
