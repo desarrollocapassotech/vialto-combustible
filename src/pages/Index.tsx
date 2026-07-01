@@ -30,6 +30,53 @@ import Loader from "@/components/ui/loader";
 import { endOfMonth, formatISO, startOfMonth } from "date-fns";
 import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
+import { apiJson, ApiError } from "@/lib/api";
+
+// ─── tipos para la respuesta del backend ─────────────────────────────────────
+interface CargaApi {
+  id: string;
+  tenantId: string;
+  vehiculoId: string;
+  vehiculo: { patente: string } | null;
+  choferId: string | null;
+  chofer: { nombre: string; dni: string | null } | null;
+  estacion: string;
+  litros: number;
+  importe: number;
+  km: number;
+  formaPago: string | null;
+  fecha: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+function mapCargaToLoadData(c: CargaApi): LoadData {
+  return {
+    id: c.id,
+    driverName: c.chofer?.nombre ?? "",
+    licensePlate: c.vehiculo?.patente ?? c.vehiculoId,
+    driverDni: c.chofer?.dni ? Number(c.chofer.dni) : 0,
+    date: c.fecha,
+    // Nombres del modelo (LoadData)
+    litros: c.litros,
+    importe: c.importe,
+    estacion: c.estacion,
+    km: c.km,
+    formaPago: c.formaPago ?? undefined,
+    empresaId: c.tenantId,
+    // Aliases que usa LoadHistory (nombres del formulario legacy)
+    liters: c.litros,
+    totalAmount: c.importe,
+    kilometers: c.km,
+    serviceStation: c.estacion,
+    paymentMethod: c.formaPago ?? null,
+  } as LoadData;
+}
+
+function currentMonthValue(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
 
 const SUPER_ADMIN_EMPRESA_KEY = "superAdminEmpresaId";
 const SUPER_ADMIN_EMPRESA_NOMBRE_KEY = "superAdminEmpresaNombre";
@@ -55,6 +102,7 @@ const Index = () => {
   const [driverCount, setDriverCount] = useState<number | null>(null);
   const [monthlyLoadCount, setMonthlyLoadCount] = useState<number | null>(null);
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthValue);
   const navigate = useNavigate();
   const logoUrl = useEmpresaLogo(empresaId);
 
@@ -123,30 +171,40 @@ const Index = () => {
 
   useEffect(() => {
     const fetchLoads = async () => {
-      if (!empresaId) return;
+      if (!userRole) return;
       setIsLoading(true);
       try {
-        let loadsQuery;
-
         if (userRole === "CHOFER") {
-          loadsQuery = query(
-            collection(db, "cargas").withConverter(loadConverter),
-            where("empresaId", "==", empresaId),
-            where("driverDni", "==", userDni),
-            orderBy("date", "desc")
+          // Cargas del chofer desde la API de Vialto (JWT propio en localStorage)
+          const token = localStorage.getItem("vialtoToken");
+          if (!token) {
+            navigate("/login");
+            return;
+          }
+          const getToken = async () => token;
+          const data = await apiJson<{ cargas: CargaApi[]; count: number }>(
+            `/api/combustible/chofer/mis-cargas?month=${selectedMonth}`,
+            getToken,
           );
+          setLoads(data.cargas.map(mapCargaToLoadData));
         } else {
-          loadsQuery = query(
+          // ADMIN / SUPER_ADMIN: sigue usando Firestore (pendiente de migración)
+          if (!empresaId) return;
+          const loadsQuery = query(
             collection(db, "cargas").withConverter(loadConverter),
             where("empresaId", "==", empresaId),
-            orderBy("date", "desc")
+            orderBy("date", "desc"),
           );
+          const querySnapshot = await getDocs(loadsQuery);
+          setLoads(querySnapshot.docs.map((d) => d.data()));
         }
-
-        const querySnapshot = await getDocs(loadsQuery);
-        const loadsData = querySnapshot.docs.map((d) => d.data());
-        setLoads(loadsData);
       } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          localStorage.removeItem("user");
+          localStorage.removeItem("vialtoToken");
+          navigate("/login");
+          return;
+        }
         console.error("Error al obtener las cargas:", error);
         toast.error("Error al cargar las cargas");
       } finally {
@@ -154,8 +212,8 @@ const Index = () => {
       }
     };
 
-    if (userRole && empresaId) fetchLoads();
-  }, [userRole, userDni, empresaId]);
+    if (userRole) fetchLoads();
+  }, [userRole, empresaId, selectedMonth, navigate]);
 
   useEffect(() => {
     const fetchEmpresas = async () => {
@@ -229,9 +287,38 @@ const Index = () => {
     );
   });
 
-  const handleNewLoad = async (data: Omit<LoadData, "id" | "empresaId">) => {
-    if (!empresaId) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleNewLoad = async (data: any) => {
     try {
+      if (userRole === "CHOFER") {
+        // T5: guardar carga en Vialto (PostgreSQL vía API backend)
+        const token = localStorage.getItem("vialtoToken");
+        if (!token) { navigate("/login"); return; }
+        const getToken = async () => token;
+        const created = await apiJson<CargaApi>(
+          "/api/combustible/chofer/cargas",
+          getToken,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              patente: data.licensePlate,
+              estacion: data.serviceStation,
+              litros: data.liters,
+              importe: data.totalAmount,
+              km: data.kilometers,
+              ...(data.paymentMethod ? { formaPago: data.paymentMethod } : {}),
+              fecha: data.date,
+            }),
+          },
+        );
+        setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+        toast.success("Carga registrada exitosamente");
+        setIsFormOpen(false);
+        return;
+      }
+
+      // ADMIN / SUPER_ADMIN: Firestore (pendiente de migración)
+      if (!empresaId) return;
       const payload = {
         ...data,
         driverDni: data.driverDni ?? userDni!,
@@ -254,6 +341,12 @@ const Index = () => {
       }
       setIsFormOpen(false);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("vialtoToken");
+        navigate("/login");
+        return;
+      }
       console.error("Error al manejar la carga:", error);
       toast.error("Error al registrar o actualizar la carga");
     }
@@ -397,9 +490,9 @@ const Index = () => {
             </div>
           )}
 
-          {/* Botón nueva carga */}
+          {/* Botón nueva carga + selector de mes (solo CHOFER) */}
           {userRole === "CHOFER" && (
-            <div className="flex justify-center md:justify-start">
+            <div className="flex flex-wrap items-center gap-3 justify-between">
               <Button
                 onClick={() => {
                   setEditLoad(null);
@@ -410,6 +503,19 @@ const Index = () => {
                 <PlusCircle size={20} className="mr-2" />
                 Nueva Carga
               </Button>
+              <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm px-3 py-2">
+                <Calendar className="h-4 w-4 text-[#E8470A]" />
+                <label htmlFor="mes-filtro" className="text-sm text-gray-500 whitespace-nowrap">
+                  Mes:
+                </label>
+                <input
+                  id="mes-filtro"
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="border-0 text-sm text-gray-800 focus:outline-none"
+                />
+              </div>
             </div>
           )}
 
