@@ -361,7 +361,9 @@ const Index = () => {
         return;
       }
       console.error("Error al manejar la carga:", error);
-      toast.error("Error al registrar o actualizar la carga");
+      toast.error(error instanceof ApiError && error.message
+        ? error.message
+        : "Error al registrar o actualizar la carga");
     }
   };
 
@@ -595,7 +597,7 @@ const Index = () => {
           }}
           defaultValues={editLoad}
           driverName={userName || ""}
-          licensePlate={userLicensePlate || ""}
+          licensePlate={editLoad ? (editLoad.licensePlate ?? "") : (loads[0]?.licensePlate || userLicensePlate || "")}
         />
       </Dialog>
     </div>

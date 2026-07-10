@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { apiJson, ApiError } from "@/lib/api";
 import { Checkbox } from "@/components/ui/checkbox";
+import VialtoLogo from "@/components/VialtoLogo";
 
 const LOGIN_SAVE_KEY = "loginChofer";
 
@@ -97,8 +98,8 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-[#1A1A1A] flex flex-col items-center justify-center px-4">
       <div className="text-center mb-8">
-        <h2 className="text-xl font-display font-normal text-white sm:text-2xl tracking-tight">¡Hola, chofer!</h2>
-        <p className="text-sm text-gray-300">Ingresá tus datos para registrar las cargas de combustible</p>
+        <VialtoLogo variant="dark" showTagline className="mx-auto mb-4" />
+        <p className="text-sm text-gray-300 mt-2">Ingresá tus datos para registrar las cargas</p>
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md space-y-4">
@@ -141,20 +142,21 @@ const Login = () => {
             {isLoading ? "Entrando..." : "Iniciar Sesión"}
           </Button>
 
-          <div className="text-center mt-4">
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="text-sm text-[#E8470A] font-medium hover:underline"
-            >
-              ← Volver
-            </button>
-          </div>
         </form>
       </div>
 
       <div className="mt-8 text-center text-white/50 text-sm font-sans">
         <span>Vialto · Sistema de registro de combustible</span>
+      </div>
+
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => navigate("/login-administrador")}
+          className="text-white/20 text-xs hover:text-white/40 transition-colors"
+        >
+          Acceso administrador
+        </button>
       </div>
     </div>
   );
