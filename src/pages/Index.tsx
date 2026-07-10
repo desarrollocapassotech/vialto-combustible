@@ -92,6 +92,8 @@ const Index = () => {
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editLoad, setEditLoad] = useState<LoadData | null>(null);
+  const [kmError, setKmError] = useState<string | null>(null);
+  const [lastUsedPlate, setLastUsedPlate] = useState<string>("");
   const [filter, setFilter] = useState("");
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [userDni, setUserDni] = useState<number | null>(null);
@@ -168,6 +170,17 @@ const Index = () => {
     fetchUserRole();
   }, [navigate]);
 
+  useEffect(() => {
+    if (userRole !== "CHOFER") return;
+    const token = localStorage.getItem("vialtoToken");
+    if (!token) return;
+    apiJson<{ patente: string | null } | null>(
+      "/api/combustible/chofer/ultima-carga",
+      async () => token,
+    )
+      .then((data) => { if (data?.patente) setLastUsedPlate(data.patente); })
+      .catch(() => {});
+  }, [userRole]);
 
   useEffect(() => {
     const fetchLoads = async () => {
@@ -314,6 +327,7 @@ const Index = () => {
           setLoads((prev) =>
             prev.map((l) => (l.id === editLoad.id ? mapCargaToLoadData(updated) : l))
           );
+          setKmError(null);
           toast.success("Carga actualizada exitosamente");
         } else {
           // T5: crear carga vía API
@@ -323,6 +337,8 @@ const Index = () => {
             { method: "POST", body: JSON.stringify(apiPayload) },
           );
           setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+          setKmError(null);
+          if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
           toast.success("Carga registrada exitosamente");
         }
         setIsFormOpen(false);
@@ -361,9 +377,16 @@ const Index = () => {
         return;
       }
       console.error("Error al manejar la carga:", error);
-      toast.error(error instanceof ApiError && error.message
+      const msg = error instanceof ApiError && error.message
         ? error.message
-        : "Error al registrar o actualizar la carga");
+        : "Error al registrar o actualizar la carga";
+      const isKmError = typeof msg === "string" && msg.toLowerCase().includes("km");
+      if (isKmError) {
+        setKmError(msg);
+      } else {
+        setKmError(null);
+      }
+      toast.error(msg);
     }
   };
 
@@ -588,16 +611,25 @@ const Index = () => {
       </main>
 
       {/* Diálogo para formulario */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog open={isFormOpen} onOpenChange={(open) => {
+        setIsFormOpen(open);
+        if (!open) {
+          setEditLoad(null);
+          setKmError(null);
+        }
+      }}>
         <NewLoadForm
           onSubmit={handleNewLoad}
           onCancel={() => {
             setIsFormOpen(false);
             setEditLoad(null);
+            setKmError(null);
           }}
           defaultValues={editLoad}
           driverName={userName || ""}
-          licensePlate={editLoad ? (editLoad.licensePlate ?? "") : (loads[0]?.licensePlate || userLicensePlate || "")}
+          licensePlate={editLoad ? (editLoad.licensePlate ?? "") : (lastUsedPlate || userLicensePlate || "")}
+          kmError={kmError}
+          onClearKmError={() => setKmError(null)}
         />
       </Dialog>
     </div>
