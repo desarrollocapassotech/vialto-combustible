@@ -42,6 +42,7 @@ interface CargaApi {
   chofer: { nombre: string; dni: string | null } | null;
   estacion: string;
   litros: number;
+  precioPorLitro: number;
   importe: number;
   km: number;
   formaPago: string | null;
@@ -66,6 +67,7 @@ function mapCargaToLoadData(c: CargaApi): LoadData {
     empresaId: c.tenantId,
     // Aliases que usa LoadHistory (nombres del formulario legacy)
     liters: c.litros,
+    pricePerLiter: c.precioPorLitro,
     totalAmount: c.importe,
     kilometers: c.km,
     serviceStation: c.estacion,
@@ -311,6 +313,7 @@ const Index = () => {
           patente: data.licensePlate,
           estacion: data.serviceStation,
           litros: data.liters,
+          precioPorLitro: data.pricePerLiter,
           importe: data.totalAmount,
           km: data.kilometers,
           ...(data.paymentMethod ? { formaPago: data.paymentMethod } : {}),

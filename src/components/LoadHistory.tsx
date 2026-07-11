@@ -82,10 +82,14 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
               </div>
               <p className="text-xs text-muted-foreground">{fmtDate(load.date)}</p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="grid grid-cols-4 gap-2 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Litros</p>
                 <p className="font-medium">{fmtNum(load.liters)} L</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Precio/L</p>
+                <p className="font-medium">{load.pricePerLiter != null ? `$${fmtNum(load.pricePerLiter)}` : "—"}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Km</p>
@@ -109,7 +113,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
         <table className="min-w-full bg-card text-sm">
           <thead className="bg-muted text-left">
             <tr>
-              {["Chofer", "Patente", "Litros", "Km", "Monto", "Fecha", ""].map((h) => (
+              {["Chofer", "Patente", "Litros", "Precio/L", "Km", "Monto", "Fecha", ""].map((h) => (
                 <th key={h} className="px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {h}
                 </th>
@@ -122,6 +126,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
                 <td className="px-4 py-2.5">{load.driverName}</td>
                 <td className="px-4 py-2.5">{load.licensePlate}</td>
                 <td className="px-4 py-2.5">{fmtNum(load.liters)} L</td>
+                <td className="px-4 py-2.5">{load.pricePerLiter != null ? `$${fmtNum(load.pricePerLiter)}` : "—"}</td>
                 <td className="px-4 py-2.5">{fmtNum(load.kilometers)}</td>
                 <td className="px-4 py-2.5">${fmtNum(load.totalAmount)}</td>
                 <td className="px-4 py-2.5">{fmtDate(load.date)}</td>
