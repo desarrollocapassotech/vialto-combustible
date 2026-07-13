@@ -10,13 +10,13 @@ interface LoadHistoryProps {
 
 const ITEMS_PER_PAGE = 10;
 
-const fmtDate = (date: string) =>
+const fmtDate = (date: Date) =>
   new Intl.DateTimeFormat("es-ES", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     timeZone: "UTC",
-  }).format(new Date(date));
+  }).format(date);
 
 const fmtNum = (n: number) =>
   n.toLocaleString("es-ES", { minimumFractionDigits: 0 });

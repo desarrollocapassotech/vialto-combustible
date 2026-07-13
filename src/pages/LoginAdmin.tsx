@@ -26,7 +26,7 @@ const LoginAdmin = () => {
     const userDocSnapshot = await getDoc(userDocRef);
     if (!userDocSnapshot.exists()) return null;
     const userData = userDocSnapshot.data();
-    const stored = { ...userData, id: uid };
+    const stored = { ...userData, id: uid } as { id: string; role?: string; name?: string; [key: string]: any };
     localStorage.setItem("user", JSON.stringify(stored));
     return stored;
   };
