@@ -135,6 +135,7 @@ const NewLoadForm = ({
     licensePlate: licensePlate || "",
     serviceStation: defaultValues?.serviceStation || "YPF",
     liters: "",
+    pricePerLiter: "",
     totalAmount: "",
     kilometers: "",
     date: new Date(),
@@ -152,6 +153,11 @@ const NewLoadForm = ({
           typeof defaultValues.liters === "number"
             ? defaultValues.liters
             : parseFloat(String(defaultValues.liters).replace(",", ".")) || 0
+        ),
+        pricePerLiter: formatAmountFromNumber(
+          typeof defaultValues.pricePerLiter === "number"
+            ? defaultValues.pricePerLiter
+            : parseFloat(String(defaultValues.pricePerLiter || "").replace(",", ".")) || 0
         ),
         totalAmount: formatAmountFromNumber(
           typeof defaultValues.totalAmount === "number"
@@ -173,6 +179,7 @@ const NewLoadForm = ({
         licensePlate: formatPatente(licensePlate || ""),
         serviceStation: "YPF",
         liters: "",
+        pricePerLiter: "",
         totalAmount: "",
         kilometers: "",
         date: new Date(),
@@ -218,6 +225,7 @@ const NewLoadForm = ({
         licensePlate: parsePatente(formData.licensePlate),
         date: formData.date.toISOString(),
         liters: parseAmount(formData.liters),
+        pricePerLiter: parseAmount(formData.pricePerLiter),
         totalAmount: parseAmount(formData.totalAmount),
         kilometers: parseInteger(formData.kilometers),
         paymentMethod: formData.paymentMethod,
@@ -323,6 +331,24 @@ const NewLoadForm = ({
             value={formData.liters}
             onChange={(e) =>
               setFormData({ ...formData, liters: formatAmount(e.target.value) })
+            }
+            className={inputBaseClass}
+            placeholder="Ej: 1.234,56"
+          />
+        </div>
+
+        {/* Precio por Litro */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Precio por Litro
+          </label>
+          <Input
+            required
+            type="text"
+            inputMode="decimal"
+            value={formData.pricePerLiter}
+            onChange={(e) =>
+              setFormData({ ...formData, pricePerLiter: formatAmount(e.target.value) })
             }
             className={inputBaseClass}
             placeholder="Ej: 1.234,56"

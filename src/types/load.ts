@@ -8,6 +8,7 @@ export interface LoadData {
   serviceStation: string;
   totalAmount: number;
   liters: number;
+  pricePerLiter?: number;
   kilometers: number;
   date: Date;
   paymentMethod?: string;
