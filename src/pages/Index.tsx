@@ -49,6 +49,8 @@ interface CargaApi {
   fecha: string;
   createdBy: string;
   createdAt: string;
+  fotoTacometro?: string | null;
+  fotoTicket?: string | null;
 }
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
@@ -57,7 +59,7 @@ function mapCargaToLoadData(c: CargaApi): LoadData {
     driverName: c.chofer?.nombre ?? "",
     licensePlate: c.vehiculo?.patente ?? c.vehiculoId,
     driverDni: c.chofer?.dni ? Number(c.chofer.dni) : 0,
-    date: c.fecha,
+    date: new Date(c.fecha),
     // Nombres del modelo (LoadData)
     litros: c.litros,
     importe: c.importe,
@@ -71,7 +73,9 @@ function mapCargaToLoadData(c: CargaApi): LoadData {
     totalAmount: c.importe,
     kilometers: c.km,
     serviceStation: c.estacion,
-    paymentMethod: c.formaPago ?? null,
+    paymentMethod: c.formaPago ?? undefined,
+    fotoTacometro: c.fotoTacometro ?? undefined,
+    fotoTicket: c.fotoTicket ?? undefined,
   } as LoadData;
 }
 
@@ -318,6 +322,8 @@ const Index = () => {
           km: data.kilometers,
           ...(data.paymentMethod ? { formaPago: data.paymentMethod } : {}),
           fecha: data.date,
+          fotoTacometro: data.fotoTacometro,
+          fotoTicket: data.fotoTicket,
         };
 
         if (editLoad) {
@@ -358,7 +364,7 @@ const Index = () => {
       } as LoadData;
       if (editLoad) {
         const loadDocRef = doc(db, "cargas", editLoad.id!).withConverter(loadConverter);
-        await updateDoc(loadDocRef, payload);
+        await updateDoc(loadDocRef, payload as any);
         setLoads((prev) =>
           prev.map((l) => (l.id === editLoad.id ? { ...l, ...payload } : l))
         );

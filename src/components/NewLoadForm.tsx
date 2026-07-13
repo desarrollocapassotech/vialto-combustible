@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiJson } from "@/lib/api";
+import { Camera, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -113,6 +115,83 @@ interface NewLoadFormProps {
   onClearKmError?: () => void;
 }
 
+interface PhotoUploaderProps {
+  label: string;
+  previewUrl: string | null;
+  onFileSelect: (file: File | null) => void;
+  onClear: () => void;
+  isReadOnly: boolean;
+}
+
+const PhotoUploader = ({
+  label,
+  previewUrl,
+  onFileSelect,
+  onClear,
+  isReadOnly,
+}: PhotoUploaderProps) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("El archivo debe ser una imagen (PNG, JPG, etc.)");
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error("La imagen no debe superar 10 MB");
+        return;
+      }
+      onFileSelect(file);
+    }
+  };
+
+  return (
+    <div className="flex flex-col space-y-2">
+      <label className="block text-sm font-medium text-gray-700">
+        {label} <span className="text-red-500">*</span>
+      </label>
+
+      {previewUrl ? (
+        <div className="relative rounded-xl overflow-hidden border border-gray-200 aspect-video bg-gray-50 flex items-center justify-center group">
+          <img
+            src={previewUrl}
+            alt={label}
+            className="w-full h-full object-contain"
+          />
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={onClear}
+              className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-2 shadow-md transition-all active:scale-95"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-xl border-2 border-dashed border-gray-300 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-all flex flex-col items-center justify-center p-6 aspect-video bg-white text-gray-500 space-y-2 group"
+        >
+          <Camera className="h-8 w-8 text-gray-400 group-hover:text-[#E8470A]" />
+          <span className="text-sm font-medium">Capturar o subir foto</span>
+          <span className="text-xs text-gray-400">JPG, PNG o WEBP de hasta 10 MB</span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+        </button>
+      )}
+    </div>
+  );
+};
+
 const NewLoadForm = ({
   onSubmit,
   onCancel,
@@ -128,6 +207,16 @@ const NewLoadForm = ({
   const [isLicensePlateEnabled, setIsLicensePlateEnabled] = useState(false);
   const [isStationSheetOpen, setIsStationSheetOpen] = useState(false);
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
+
+  // Estados para fotos y previsualización
+  const [fotoTacometroFile, setFotoTacometroFile] = useState<File | null>(null);
+  const [fotoTacometroPreview, setFotoTacometroPreview] = useState<string | null>(
+    defaultValues?.fotoTacometro || null
+  );
+  const [fotoTicketFile, setFotoTicketFile] = useState<File | null>(null);
+  const [fotoTicketPreview, setFotoTicketPreview] = useState<string | null>(
+    defaultValues?.fotoTicket || null
+  );
 
   // Estado del formulario
   const [formData, setFormData] = useState({
@@ -173,6 +262,10 @@ const NewLoadForm = ({
         date: defaultValues.date ? new Date(defaultValues.date) : new Date(),
         paymentMethod: defaultValues.paymentMethod || null,
       });
+      setFotoTacometroPreview(defaultValues.fotoTacometro || null);
+      setFotoTicketPreview(defaultValues.fotoTicket || null);
+      setFotoTacometroFile(null);
+      setFotoTicketFile(null);
     } else {
       setFormData({
         driverName: driverName || "",
@@ -183,8 +276,12 @@ const NewLoadForm = ({
         totalAmount: "",
         kilometers: "",
         date: new Date(),
-        paymentMethod: "TARJETA",
+        paymentMethod: null,
       });
+      setFotoTacometroPreview(null);
+      setFotoTicketPreview(null);
+      setFotoTacometroFile(null);
+      setFotoTicketFile(null);
     }
   }, [defaultValues, driverName, licensePlate]);
 
@@ -225,12 +322,45 @@ const NewLoadForm = ({
   const maxAllowedDiff = expectedTotal * 0.01;
   const hasDiscrepancy = hasLitersAndPrice && difference > maxAllowedDiff;
 
+  const uploadFoto = async (file: File, tipo: "tacometro" | "ticket"): Promise<string> => {
+    const token = localStorage.getItem("vialtoToken");
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+    formDataUpload.append("tipo", tipo);
+
+    const res = await apiJson<{ url: string }>(
+      "/api/combustible/chofer/fotos",
+      async () => token,
+      {
+        method: "POST",
+        body: formDataUpload,
+      }
+    );
+    return res.url;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (hasDiscrepancy) return;
+
+    if (!fotoTacometroPreview || !fotoTicketPreview) {
+      toast.error("Ambas fotos (tacómetro y ticket) son obligatorias.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      let fotoTacometroUrl = defaultValues?.fotoTacometro || "";
+      let fotoTicketUrl = defaultValues?.fotoTicket || "";
+
+      if (fotoTacometroFile) {
+        fotoTacometroUrl = await uploadFoto(fotoTacometroFile, "tacometro");
+      }
+      if (fotoTicketFile) {
+        fotoTicketUrl = await uploadFoto(fotoTicketFile, "ticket");
+      }
+
       await onSubmit({
         ...formData,
         licensePlate: parsePatente(formData.licensePlate),
@@ -240,9 +370,14 @@ const NewLoadForm = ({
         totalAmount: parseAmount(formData.totalAmount),
         kilometers: parseInteger(formData.kilometers),
         paymentMethod: formData.paymentMethod,
+        fotoTacometro: fotoTacometroUrl,
+        fotoTicket: fotoTicketUrl,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al enviar el formulario:", error);
+      toast.error(
+        error?.message || "Ocurrió un error al subir las fotos. Intente nuevamente."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -271,371 +406,395 @@ const NewLoadForm = ({
           onSubmit={handleSubmit}
           className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom)))] space-y-4 sm:flex-none sm:overflow-visible sm:max-h-none sm:pb-4"
         >
-        {/* Monto Total - estilo destacado */}
-        <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
-          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-            Monto Total
-          </label>
-          <Input
-            required
-            type="text"
-            inputMode="decimal"
-            value={formData.totalAmount}
-            onChange={(e) =>
-              setFormData({ ...formData, totalAmount: formatAmount(e.target.value, "$") })
-            }
-            className="min-h-[64px] w-full text-2xl sm:text-3xl font-semibold py-4 px-5 touch-manipulation bg-white border-2 border-gray-200 rounded-lg shadow-sm text-center placeholder:text-gray-400 focus:border-[#E8470A] focus:ring-2 focus:ring-[#E8470A]/20"
-            placeholder="$0,00"
-          />
-          {hasLitersAndPrice && (
-            <div className="mt-3 pt-3 border-t border-gray-200 text-center space-y-1">
-              <div className="text-sm text-gray-600">
-                Total esperado: <span className="font-semibold text-gray-800">${formatAmountFromNumber(expectedTotal)}</span>
-              </div>
-              {hasDiscrepancy && (
-                <div className="text-xs font-semibold text-red-600 flex items-center justify-center gap-1">
-                  <span>⚠️ El monto ingresado difiere más del 1% del esperado.</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Método de Pago - botones tipo segmented control para mobile */}
-        {(defaultValues || formData.paymentMethod) && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Método de Pago
+          {/* Monto Total - estilo destacado */}
+          <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Monto Total
             </label>
-            <div
-              role="group"
-              aria-label="Método de pago"
-              className="grid grid-cols-2 gap-2"
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({ ...formData, paymentMethod: "EFECTIVO" })
-                }
-                className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
-                  formData.paymentMethod === "EFECTIVO"
-                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                }`}
-              >
-                Efectivo
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({ ...formData, paymentMethod: "TARJETA" })
-                }
-                className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
-                  formData.paymentMethod === "TARJETA"
-                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                }`}
-              >
-                Tarjeta
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Litros Cargados */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Litros Cargados
-          </label>
-          <Input
-            required
-            type="text"
-            inputMode="decimal"
-            value={formData.liters}
-            onChange={(e) =>
-              setFormData({ ...formData, liters: formatAmount(e.target.value) })
-            }
-            className={inputBaseClass}
-            placeholder="Ej: 1.234,56"
-          />
-        </div>
-
-        {/* Precio por Litro */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Precio por Litro
-          </label>
-          <Input
-            required
-            type="text"
-            inputMode="decimal"
-            value={formData.pricePerLiter}
-            onChange={(e) =>
-              setFormData({ ...formData, pricePerLiter: formatAmount(e.target.value) })
-            }
-            className={inputBaseClass}
-            placeholder="Ej: 1.234,56"
-          />
-        </div>
-
-        {/* Estación de Servicio - abre sheet al tocar */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Estación de Servicio
-          </label>
-          <button
-            type="button"
-            onClick={() => setIsStationSheetOpen(true)}
-            className="min-h-[52px] w-full rounded-xl text-base font-medium touch-manipulation text-left px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 active:bg-gray-50 flex items-center justify-between"
-          >
-            <span className={formData.serviceStation ? "text-gray-900" : "text-gray-500"}>
-              {formData.serviceStation || "Seleccionar estación"}
-            </span>
-            <svg
-              className="h-5 w-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          <Sheet open={isStationSheetOpen} onOpenChange={setIsStationSheetOpen}>
-            <SheetContent side="bottom" className="rounded-t-2xl">
-              <SheetHeader>
-                <SheetTitle>Estación de Servicio</SheetTitle>
-              </SheetHeader>
-              <div className="grid grid-cols-2 gap-2 mt-6 pb-8">
-                {["YPF", "GOTTIG", "AGRO", "AXION", "LA PAZ", "OTRA"].map(
-                  (station) => (
-                    <button
-                      key={station}
-                      type="button"
-                      onClick={() => {
-                        setFormData({ ...formData, serviceStation: station });
-                        setIsStationSheetOpen(false);
-                      }}
-                      className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
-                        formData.serviceStation === station
-                          ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                      }`}
-                    >
-                      {station}
-                    </button>
-                  )
+            <Input
+              required
+              type="text"
+              inputMode="decimal"
+              value={formData.totalAmount}
+              onChange={(e) =>
+                setFormData({ ...formData, totalAmount: formatAmount(e.target.value, "$") })
+              }
+              className="min-h-[64px] w-full text-2xl sm:text-3xl font-semibold py-4 px-5 touch-manipulation bg-white border-2 border-gray-200 rounded-lg shadow-sm text-center placeholder:text-gray-400 focus:border-[#E8470A] focus:ring-2 focus:ring-[#E8470A]/20"
+              placeholder="$0,00"
+            />
+            {hasLitersAndPrice && (
+              <div className="mt-3 pt-3 border-t border-gray-200 text-center space-y-1">
+                <div className="text-sm text-gray-600">
+                  Total esperado: <span className="font-semibold text-gray-800">${formatAmountFromNumber(expectedTotal)}</span>
+                </div>
+                {hasDiscrepancy && (
+                  <div className="text-xs font-semibold text-red-600 flex items-center justify-center gap-1">
+                    <span>⚠️ El monto ingresado difiere más del 1% del esperado.</span>
+                  </div>
                 )}
               </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+            )}
+          </div>
 
-        {/* Kilometros */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Kilómetros
-          </label>
-          <Input
-            required
-            type="text"
-            inputMode="numeric"
-            value={formData.kilometers}
-            onChange={(e) => {
-              setFormData({ ...formData, kilometers: formatInteger(e.target.value) });
-              // Si hay un error de km externo, lo limpiamos al editar
-              if (kmError && onClearKmError) onClearKmError();
-            }}
-            className={`${inputBaseClass} ${kmError ? "border-red-400 focus:border-red-400 focus:ring-red-400" : ""}`}
-            placeholder="Ej: 10.000"
-          />
-          {prevKmInfo && !kmError && (
-            <p className="mt-1.5 text-xs text-gray-500">
-              Carga anterior:{" "}
-              <span className="font-medium text-gray-700">
-                {prevKmInfo.km.toLocaleString("es-AR")} km
-              </span>
-              {" · "}
-              {new Date(prevKmInfo.fecha).toLocaleDateString("es-AR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                timeZone: "UTC",
-              })}
-            </p>
-          )}
-          {kmError && (
-            <p className="mt-1.5 text-sm text-red-600 font-medium">{kmError}</p>
-          )}
-        </div>
-
-        {/* Fecha - Sheet con calendario al tocar */}
-        <div>
-          <span className="block text-sm font-medium text-gray-700 mb-2">
-            Fecha
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsDateSheetOpen(true)}
-            className="min-h-[52px] w-full rounded-xl text-base font-medium touch-manipulation flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 active:bg-gray-50 text-left"
-          >
-            <span className="text-gray-900">
-              {formData.date.toLocaleDateString("es-AR", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })}
-            </span>
-            <svg
-              className="h-5 w-5 text-gray-400 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </button>
-          <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
-            <SheetContent side="bottom" className="rounded-t-2xl">
-              <SheetHeader>
-                <SheetTitle>Seleccionar fecha</SheetTitle>
-              </SheetHeader>
-              <div className="py-4 pb-8">
-                <Calendar
-                  mode="single"
-                  selected={formData.date}
-                  onSelect={(date) => {
-                    if (date) {
-                      setFormData({ ...formData, date });
-                      setIsDateSheetOpen(false);
-                    }
-                  }}
-                  classNames={{
-                    cell: "h-12 w-12 p-0",
-                    day: "h-12 w-12 text-base",
-                  }}
-                />
+          {/* Método de Pago - botones tipo segmented control para mobile */}
+          {(defaultValues || formData.paymentMethod) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Método de Pago
+              </label>
+              <div
+                role="group"
+                aria-label="Método de pago"
+                className="grid grid-cols-2 gap-2"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, paymentMethod: "EFECTIVO" })
+                  }
+                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.paymentMethod === "EFECTIVO"
+                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                    }`}
+                >
+                  Efectivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData({ ...formData, paymentMethod: "TARJETA" })
+                  }
+                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.paymentMethod === "TARJETA"
+                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                    }`}
+                >
+                  Tarjeta
+                </button>
               </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+            </div>
+          )}
 
-        {/* Patente del vehículo - al final */}
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <label className="text-sm font-medium text-gray-700">
-              Patente del vehículo
+          {/* Litros Cargados */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Litros Cargados
+            </label>
+            <Input
+              required
+              type="text"
+              inputMode="decimal"
+              value={formData.liters}
+              onChange={(e) =>
+                setFormData({ ...formData, liters: formatAmount(e.target.value) })
+              }
+              className={inputBaseClass}
+              placeholder="Ej: 1.234,56"
+            />
+          </div>
+
+          {/* Precio por Litro */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Precio por Litro
+            </label>
+            <Input
+              required
+              type="text"
+              inputMode="decimal"
+              value={formData.pricePerLiter}
+              onChange={(e) =>
+                setFormData({ ...formData, pricePerLiter: formatAmount(e.target.value) })
+              }
+              className={inputBaseClass}
+              placeholder="Ej: 1.234,56"
+            />
+          </div>
+
+          {/* Estación de Servicio - abre sheet al tocar */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Estación de Servicio
             </label>
             <button
               type="button"
-              onClick={() => setIsLicensePlateEnabled((v) => !v)}
-              className="text-xs font-medium text-[#E8470A] hover:underline touch-manipulation"
+              onClick={() => setIsStationSheetOpen(true)}
+              className="min-h-[52px] w-full rounded-xl text-base font-medium touch-manipulation text-left px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 active:bg-gray-50 flex items-center justify-between"
             >
-              {isLicensePlateEnabled ? "Bloquear" : "Editar"}
-            </button>
-          </div>
-          {(() => {
-            const isMercosur = showPlateDesign(formData.licensePlate);
-            return (
-              <div
-                className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${
-                  isMercosur
-                    ? "rounded-lg border-2 border-black"
-                    : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
-                }`}
+              <span className={formData.serviceStation ? "text-gray-900" : "text-gray-500"}>
+                {formData.serviceStation || "Seleccionar estación"}
+              </span>
+              <svg
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                {/* Capa decorativa - diseño Mercosur (AB 123 CD) */}
-                {isMercosur && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-0 left-0 right-0 h-[26%] min-h-[28px] bg-[#003366] flex items-center justify-between px-3 py-1">
-                      <span className="text-white text-[9px] sm:text-[10px] font-bold tracking-[0.15em] flex-1 text-center select-none drop-shadow-sm">
-                        REPÚBLICA ARGENTINA
-                      </span>
-                      <div className="w-6 h-4 rounded-sm overflow-hidden flex flex-col shrink-0 border border-white/50 shadow-sm">
-                        <div className="h-1/3 bg-[#74ACDF]" />
-                        <div className="h-1/3 bg-white flex items-center justify-center">
-                          <svg viewBox="0 0 32 32" className="w-3.5 h-3.5 shrink-0">
-                            <circle cx="16" cy="16" r="6" fill="#F4B800" />
-                            {[...Array(16)].map((_, i) => {
-                              const a = (i * 22.5 * Math.PI) / 180;
-                              const r1 = 6; const r2 = 11;
-                              const x1 = 16 + r1 * Math.cos(a); const y1 = 16 + r1 * Math.sin(a);
-                              const x2 = 16 + r2 * Math.cos(a); const y2 = 16 + r2 * Math.sin(a);
-                              return i % 2 === 0 ? (
-                                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#F4B800" strokeWidth="1" />
-                              ) : (
-                                <path key={i} d={`M${x1} ${y1} Q${16 + 9*Math.cos(a)} ${16 + 9*Math.sin(a)} ${x2} ${y2}`} stroke="#F4B800" strokeWidth="1" fill="none" />
-                              );
-                            })}
-                            <circle cx="16" cy="14.5" r="0.6" fill="#B8860B" />
-                            <path d="M14.5 16.5 Q16 17.5 17.5 16.5" stroke="#B8860B" strokeWidth="0.5" fill="none" strokeLinecap="round" />
-                          </svg>
-                        </div>
-                        <div className="h-1/3 bg-[#74ACDF]" />
-                      </div>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-[74%] bg-white" />
-                  </div>
-                )}
-                {/* Capa decorativa - diseño ABC 123 */}
-                {!isMercosur && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-0 left-0 right-0 h-[24%] min-h-[24px] flex items-center justify-center px-3 py-1">
-                      <span className="text-[#1e5a8e] text-[11px] font-bold tracking-[0.2em] text-center uppercase">
-                        Argentina
-                      </span>
-                    </div>
-                    <div className="absolute left-3 right-3 top-[28%] bottom-[8%] bg-black rounded" />
-                  </div>
-                )}
-                {/* Un solo input - centrado en el área de contenido de cada diseño */}
-                <div
-                  className={`absolute left-0 right-0 flex items-center justify-center px-3 py-2 z-10 ${
-                    isMercosur ? "top-[26%] bottom-0" : "left-3 right-3 top-[28%] bottom-[8%]"
-                  }`}
-                >
-                  <input
-                    required
-                    value={formData.licensePlate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, licensePlate: formatPatente(e.target.value) })
-                    }
-                    inputMode="text"
-                    autoCapitalize="characters"
-                    disabled={!isLicensePlateEnabled}
-                    placeholder={isMercosur ? "AB 123 CD" : "ABC 123"}
-                    className={`w-full h-full min-h-0 text-center font-bold tracking-[0.2em] bg-transparent border-0 outline-none disabled:bg-transparent disabled:cursor-not-allowed leading-tight ${
-                      isMercosur ? "text-4xl sm:text-5xl text-black placeholder:text-gray-300" : "text-5xl sm:text-6xl text-white placeholder:text-gray-500"
-                    }`}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <Sheet open={isStationSheetOpen} onOpenChange={setIsStationSheetOpen}>
+              <SheetContent side="bottom" className="rounded-t-2xl">
+                <SheetHeader>
+                  <SheetTitle>Estación de Servicio</SheetTitle>
+                </SheetHeader>
+                <div className="grid grid-cols-2 gap-2 mt-6 pb-8">
+                  {["YPF", "GOTTIG", "AGRO", "AXION", "LA PAZ", "OTRA"].map(
+                    (station) => (
+                      <button
+                        key={station}
+                        type="button"
+                        onClick={() => {
+                          setFormData({ ...formData, serviceStation: station });
+                          setIsStationSheetOpen(false);
+                        }}
+                        className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.serviceStation === station
+                          ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                          }`}
+                      >
+                        {station}
+                      </button>
+                    )
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          {/* Kilometros */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kilómetros
+            </label>
+            <Input
+              required
+              type="text"
+              inputMode="numeric"
+              value={formData.kilometers}
+              onChange={(e) => {
+                setFormData({ ...formData, kilometers: formatInteger(e.target.value) });
+                // Si hay un error de km externo, lo limpiamos al editar
+                if (kmError && onClearKmError) onClearKmError();
+              }}
+              className={`${inputBaseClass} ${kmError ? "border-red-400 focus:border-red-400 focus:ring-red-400" : ""}`}
+              placeholder="Ej: 10.000"
+            />
+            {prevKmInfo && !kmError && (
+              <p className="mt-1.5 text-xs text-gray-500">
+                Carga anterior:{" "}
+                <span className="font-medium text-gray-700">
+                  {prevKmInfo.km.toLocaleString("es-AR")} km
+                </span>
+                {" · "}
+                {new Date(prevKmInfo.fecha).toLocaleDateString("es-AR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  timeZone: "UTC",
+                })}
+              </p>
+            )}
+            {kmError && (
+              <p className="mt-1.5 text-sm text-red-600 font-medium">{kmError}</p>
+            )}
+          </div>
+
+          {/* Fecha - Sheet con calendario al tocar */}
+          <div>
+            <span className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsDateSheetOpen(true)}
+              className="min-h-[52px] w-full rounded-xl text-base font-medium touch-manipulation flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 active:bg-gray-50 text-left"
+            >
+              <span className="text-gray-900">
+                {formData.date.toLocaleDateString("es-AR", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              <svg
+                className="h-5 w-5 text-gray-400 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+            </button>
+            <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
+              <SheetContent side="bottom" className="rounded-t-2xl">
+                <SheetHeader>
+                  <SheetTitle>Seleccionar fecha</SheetTitle>
+                </SheetHeader>
+                <div className="py-4 pb-8">
+                  <Calendar
+                    mode="single"
+                    selected={formData.date}
+                    onSelect={(date) => {
+                      if (date) {
+                        setFormData({ ...formData, date });
+                        setIsDateSheetOpen(false);
+                      }
+                    }}
+                    classNames={{
+                      cell: "h-12 w-12 p-0",
+                      day: "h-12 w-12 text-base",
+                    }}
                   />
                 </div>
-              </div>
-            );
-          })()}
-        </div>
+              </SheetContent>
+            </Sheet>
+          </div>
 
-        {/* Botones de acción */}
-        <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end sm:space-x-2 sm:pt-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            className="w-full min-h-[48px] text-base touch-manipulation sm:w-auto sm:min-h-9"
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            className="w-full min-h-[48px] text-base touch-manipulation bg-[#E8470A] hover:bg-[#FF6B2B] sm:w-auto sm:min-h-9"
-            disabled={isSubmitting || hasDiscrepancy}
-          >
-            {isSubmitting ? "Cargando..." : "Guardar"}
-          </Button>
-        </div>
+          {/* Patente del vehículo - al final */}
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label className="text-sm font-medium text-gray-700">
+                Patente del vehículo
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsLicensePlateEnabled((v) => !v)}
+                className="text-xs font-medium text-[#E8470A] hover:underline touch-manipulation"
+              >
+                {isLicensePlateEnabled ? "Bloquear" : "Editar"}
+              </button>
+            </div>
+            {(() => {
+              const isMercosur = showPlateDesign(formData.licensePlate);
+              return (
+                <div
+                  className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${isMercosur
+                    ? "rounded-lg border-2 border-black"
+                    : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
+                    }`}
+                >
+                  {/* Capa decorativa - diseño Mercosur (AB 123 CD) */}
+                  {isMercosur && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute top-0 left-0 right-0 h-[26%] min-h-[28px] bg-[#003366] flex items-center justify-between px-3 py-1">
+                        <span className="text-white text-[9px] sm:text-[10px] font-bold tracking-[0.15em] flex-1 text-center select-none drop-shadow-sm">
+                          REPÚBLICA ARGENTINA
+                        </span>
+                        <div className="w-6 h-4 rounded-sm overflow-hidden flex flex-col shrink-0 border border-white/50 shadow-sm">
+                          <div className="h-1/3 bg-[#74ACDF]" />
+                          <div className="h-1/3 bg-white flex items-center justify-center">
+                            <svg viewBox="0 0 32 32" className="w-3.5 h-3.5 shrink-0">
+                              <circle cx="16" cy="16" r="6" fill="#F4B800" />
+                              {[...Array(16)].map((_, i) => {
+                                const a = (i * 22.5 * Math.PI) / 180;
+                                const r1 = 6; const r2 = 11;
+                                const x1 = 16 + r1 * Math.cos(a); const y1 = 16 + r1 * Math.sin(a);
+                                const x2 = 16 + r2 * Math.cos(a); const y2 = 16 + r2 * Math.sin(a);
+                                return i % 2 === 0 ? (
+                                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#F4B800" strokeWidth="1" />
+                                ) : (
+                                  <path key={i} d={`M${x1} ${y1} Q${16 + 9 * Math.cos(a)} ${16 + 9 * Math.sin(a)} ${x2} ${y2}`} stroke="#F4B800" strokeWidth="1" fill="none" />
+                                );
+                              })}
+                              <circle cx="16" cy="14.5" r="0.6" fill="#B8860B" />
+                              <path d="M14.5 16.5 Q16 17.5 17.5 16.5" stroke="#B8860B" strokeWidth="0.5" fill="none" strokeLinecap="round" />
+                            </svg>
+                          </div>
+                          <div className="h-1/3 bg-[#74ACDF]" />
+                        </div>
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 h-[74%] bg-white" />
+                    </div>
+                  )}
+                  {/* Capa decorativa - diseño ABC 123 */}
+                  {!isMercosur && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute top-0 left-0 right-0 h-[24%] min-h-[24px] flex items-center justify-center px-3 py-1">
+                        <span className="text-[#1e5a8e] text-[11px] font-bold tracking-[0.2em] text-center uppercase">
+                          Argentina
+                        </span>
+                      </div>
+                      <div className="absolute left-3 right-3 top-[28%] bottom-[8%] bg-black rounded" />
+                    </div>
+                  )}
+                  {/* Un solo input - centrado en el área de contenido de cada diseño */}
+                  <div
+                    className={`absolute left-0 right-0 flex items-center justify-center px-3 py-2 z-10 ${isMercosur ? "top-[26%] bottom-0" : "left-3 right-3 top-[28%] bottom-[8%]"
+                      }`}
+                  >
+                    <input
+                      required
+                      value={formData.licensePlate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, licensePlate: formatPatente(e.target.value) })
+                      }
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      disabled={!isLicensePlateEnabled}
+                      placeholder={isMercosur ? "AB 123 CD" : "ABC 123"}
+                      className={`w-full h-full min-h-0 text-center font-bold tracking-[0.2em] bg-transparent border-0 outline-none disabled:bg-transparent disabled:cursor-not-allowed leading-tight ${isMercosur ? "text-4xl sm:text-5xl text-black placeholder:text-gray-300" : "text-5xl sm:text-6xl text-white placeholder:text-gray-500"
+                        }`}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Fotos Obligatorias (VTO-44) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <PhotoUploader
+              label="Foto del Tacómetro"
+              previewUrl={fotoTacometroPreview}
+              onFileSelect={(file) => {
+                setFotoTacometroFile(file);
+                if (file) setFotoTacometroPreview(URL.createObjectURL(file));
+              }}
+              onClear={() => {
+                setFotoTacometroFile(null);
+                setFotoTacometroPreview(null);
+              }}
+              isReadOnly={!!defaultValues?.fotoTacometro}
+            />
+            <PhotoUploader
+              label="Foto del Ticket"
+              previewUrl={fotoTicketPreview}
+              onFileSelect={(file) => {
+                setFotoTicketFile(file);
+                if (file) setFotoTicketPreview(URL.createObjectURL(file));
+              }}
+              onClear={() => {
+                setFotoTicketFile(null);
+                setFotoTicketPreview(null);
+              }}
+              isReadOnly={!!defaultValues?.fotoTicket}
+            />
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end sm:space-x-2 sm:pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              className="w-full min-h-[48px] text-base touch-manipulation sm:w-auto sm:min-h-9"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="w-full min-h-[48px] text-base touch-manipulation bg-[#E8470A] hover:bg-[#FF6B2B] sm:w-auto sm:min-h-9"
+              disabled={isSubmitting || hasDiscrepancy || !fotoTacometroPreview || !fotoTicketPreview}
+            >
+              {isSubmitting ? "Cargando..." : "Guardar"}
+            </Button>
+          </div>
         </form>
       </div>
     </DialogContent>
