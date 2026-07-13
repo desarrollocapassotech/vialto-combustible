@@ -215,8 +215,19 @@ const NewLoadForm = ({
     };
   }, [formData.licensePlate]);
 
+  // Cálculos en tiempo real de coherencia de importe
+  const litersNum = parseAmount(formData.liters);
+  const priceNum = parseAmount(formData.pricePerLiter);
+  const totalNum = parseAmount(formData.totalAmount);
+  const hasLitersAndPrice = litersNum > 0 && priceNum > 0;
+  const expectedTotal = litersNum * priceNum;
+  const difference = Math.abs(totalNum - expectedTotal);
+  const maxAllowedDiff = expectedTotal * 0.01;
+  const hasDiscrepancy = hasLitersAndPrice && difference > maxAllowedDiff;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasDiscrepancy) return;
     setIsSubmitting(true);
 
     try {
@@ -276,6 +287,18 @@ const NewLoadForm = ({
             className="min-h-[64px] w-full text-2xl sm:text-3xl font-semibold py-4 px-5 touch-manipulation bg-white border-2 border-gray-200 rounded-lg shadow-sm text-center placeholder:text-gray-400 focus:border-[#E8470A] focus:ring-2 focus:ring-[#E8470A]/20"
             placeholder="$0,00"
           />
+          {hasLitersAndPrice && (
+            <div className="mt-3 pt-3 border-t border-gray-200 text-center space-y-1">
+              <div className="text-sm text-gray-600">
+                Total esperado: <span className="font-semibold text-gray-800">${formatAmountFromNumber(expectedTotal)}</span>
+              </div>
+              {hasDiscrepancy && (
+                <div className="text-xs font-semibold text-red-600 flex items-center justify-center gap-1">
+                  <span>⚠️ El monto ingresado difiere más del 1% del esperado.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Método de Pago - botones tipo segmented control para mobile */}
@@ -608,7 +631,7 @@ const NewLoadForm = ({
           <Button
             type="submit"
             className="w-full min-h-[48px] text-base touch-manipulation bg-[#E8470A] hover:bg-[#FF6B2B] sm:w-auto sm:min-h-9"
-            disabled={isSubmitting}
+            disabled={isSubmitting || hasDiscrepancy}
           >
             {isSubmitting ? "Cargando..." : "Guardar"}
           </Button>
