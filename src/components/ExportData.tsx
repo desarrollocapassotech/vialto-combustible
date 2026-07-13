@@ -67,6 +67,7 @@ const ExportData = ({ loads }: ExportDataProps) => {
           timeZone: "UTC"
         }).format(new Date(load.date)),
         "LITROS": load.liters,
+        "PRECIO POR LITRO": load.pricePerLiter || 0,
         "MONTO": load.totalAmount,
         "KILOMETROS": load.kilometers,
         "LUGAR (NOMBRE)": load.serviceStation,

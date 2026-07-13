@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { apiJson } from "@/lib/api";
 import {
   Sheet,
   SheetContent,
@@ -108,6 +109,8 @@ interface NewLoadFormProps {
   defaultValues?: LoadData;
   driverName?: string;
   licensePlate?: string;
+  kmError?: string | null;
+  onClearKmError?: () => void;
 }
 
 const NewLoadForm = ({
@@ -116,8 +119,12 @@ const NewLoadForm = ({
   defaultValues,
   driverName,
   licensePlate,
+  kmError,
+  onClearKmError,
 }: NewLoadFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [prevKmInfo, setPrevKmInfo] = useState<{ km: number; fecha: string } | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLicensePlateEnabled, setIsLicensePlateEnabled] = useState(false);
   const [isStationSheetOpen, setIsStationSheetOpen] = useState(false);
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
@@ -128,6 +135,7 @@ const NewLoadForm = ({
     licensePlate: licensePlate || "",
     serviceStation: defaultValues?.serviceStation || "YPF",
     liters: "",
+    pricePerLiter: "",
     totalAmount: "",
     kilometers: "",
     date: new Date(),
@@ -145,6 +153,11 @@ const NewLoadForm = ({
           typeof defaultValues.liters === "number"
             ? defaultValues.liters
             : parseFloat(String(defaultValues.liters).replace(",", ".")) || 0
+        ),
+        pricePerLiter: formatAmountFromNumber(
+          typeof defaultValues.pricePerLiter === "number"
+            ? defaultValues.pricePerLiter
+            : parseFloat(String(defaultValues.pricePerLiter || "").replace(",", ".")) || 0
         ),
         totalAmount: formatAmountFromNumber(
           typeof defaultValues.totalAmount === "number"
@@ -166,6 +179,7 @@ const NewLoadForm = ({
         licensePlate: formatPatente(licensePlate || ""),
         serviceStation: "YPF",
         liters: "",
+        pricePerLiter: "",
         totalAmount: "",
         kilometers: "",
         date: new Date(),
@@ -173,6 +187,33 @@ const NewLoadForm = ({
       });
     }
   }, [defaultValues, driverName, licensePlate]);
+
+  // Consultar el último km registrado para la patente ingresada
+  useEffect(() => {
+    const plate = parsePatente(formData.licensePlate);
+    const token = localStorage.getItem("vialtoToken");
+    if (!plate || !token) {
+      setPrevKmInfo(null);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const qs = new URLSearchParams({ patente: plate });
+        if (defaultValues?.id) qs.set("excludeId", defaultValues.id);
+        const data = await apiJson<{ km: number; fecha: string } | null>(
+          `/api/combustible/chofer/ultimo-km?${qs.toString()}`,
+          async () => token,
+        );
+        setPrevKmInfo(data ?? null);
+      } catch {
+        setPrevKmInfo(null);
+      }
+    }, 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [formData.licensePlate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,6 +225,7 @@ const NewLoadForm = ({
         licensePlate: parsePatente(formData.licensePlate),
         date: formData.date.toISOString(),
         liters: parseAmount(formData.liters),
+        pricePerLiter: parseAmount(formData.pricePerLiter),
         totalAmount: parseAmount(formData.totalAmount),
         kilometers: parseInteger(formData.kilometers),
         paymentMethod: formData.paymentMethod,
@@ -295,6 +337,24 @@ const NewLoadForm = ({
           />
         </div>
 
+        {/* Precio por Litro */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Precio por Litro
+          </label>
+          <Input
+            required
+            type="text"
+            inputMode="decimal"
+            value={formData.pricePerLiter}
+            onChange={(e) =>
+              setFormData({ ...formData, pricePerLiter: formatAmount(e.target.value) })
+            }
+            className={inputBaseClass}
+            placeholder="Ej: 1.234,56"
+          />
+        </div>
+
         {/* Estación de Servicio - abre sheet al tocar */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -357,12 +417,32 @@ const NewLoadForm = ({
             type="text"
             inputMode="numeric"
             value={formData.kilometers}
-            onChange={(e) =>
-              setFormData({ ...formData, kilometers: formatInteger(e.target.value) })
-            }
-            className={inputBaseClass}
+            onChange={(e) => {
+              setFormData({ ...formData, kilometers: formatInteger(e.target.value) });
+              // Si hay un error de km externo, lo limpiamos al editar
+              if (kmError && onClearKmError) onClearKmError();
+            }}
+            className={`${inputBaseClass} ${kmError ? "border-red-400 focus:border-red-400 focus:ring-red-400" : ""}`}
             placeholder="Ej: 10.000"
           />
+          {prevKmInfo && !kmError && (
+            <p className="mt-1.5 text-xs text-gray-500">
+              Carga anterior:{" "}
+              <span className="font-medium text-gray-700">
+                {prevKmInfo.km.toLocaleString("es-AR")} km
+              </span>
+              {" · "}
+              {new Date(prevKmInfo.fecha).toLocaleDateString("es-AR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                timeZone: "UTC",
+              })}
+            </p>
+          )}
+          {kmError && (
+            <p className="mt-1.5 text-sm text-red-600 font-medium">{kmError}</p>
+          )}
         </div>
 
         {/* Fecha - Sheet con calendario al tocar */}

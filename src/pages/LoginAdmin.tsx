@@ -38,8 +38,7 @@ const LoginAdmin = () => {
       const user = userCredential.user;
       const userData = await fetchAndStoreUser(user.uid);
       if (!userData) {
-        toast.error("Usuario no registrado. Registrá tu empresa primero.");
-        navigate("/registro-empresa");
+        toast.error("Usuario no encontrado. Contactá al administrador del sistema.");
         return;
       }
       if (userData.role !== "ADMIN" && userData.role !== "SUPER_ADMIN") {
@@ -60,8 +59,7 @@ const LoginAdmin = () => {
       const user = result.user;
       const userData = await fetchAndStoreUser(user.uid);
       if (!userData) {
-        toast.error("Usuario no registrado. Registrá tu empresa primero.");
-        navigate("/registro-empresa");
+        toast.error("Usuario no encontrado. Contactá al administrador del sistema.");
         return;
       }
       if (userData.role !== "ADMIN" && userData.role !== "SUPER_ADMIN") {
@@ -181,20 +179,10 @@ const LoginAdmin = () => {
           Iniciar Sesión con Google
         </Button>
 
-        <div className="text-center mt-4 space-y-2">
-          <p className="text-sm text-gray-600">
-            ¿No tenés una cuenta?{" "}
-            <button
-              type="button"
-              onClick={() => navigate("/registro-empresa")}
-              className="text-[#E8470A] font-medium hover:underline"
-            >
-              Registrar empresa
-            </button>
-          </p>
+        <div className="text-center mt-4">
           <button
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/login")}
             className="text-sm text-[#E8470A] font-medium hover:underline"
           >
             ← Volver

@@ -4,9 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
-import RegisterEmpresa from "./pages/RegisterEmpresa";
 import ProtectedRoute from "./components/ProtectedRoute";
-import LoginSelector from "./pages/LoginSelector";
 import LoginAdmin from "./pages/LoginAdmin";
 import Login from "./pages/Login";
 import DriverManagement from "./pages/DriverManagement";
@@ -21,14 +19,11 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <Routes>
-          {/* Selector de tipo de login */}
-          <Route path="/" element={<LoginSelector />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Rutas públicas */}
           <Route path="/login" element={<Login />} />
           <Route path="/login-administrador" element={<LoginAdmin />} />
-          <Route path="/registro-empresa" element={<RegisterEmpresa />} />
-
           {/* Rutas protegidas */}
           <Route
             path="/inicio"
