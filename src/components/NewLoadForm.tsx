@@ -150,7 +150,7 @@ const PhotoUploader = ({
   return (
     <div className="flex flex-col space-y-2">
       <label className="block text-sm font-medium text-gray-700">
-        {label} <span className="text-red-500">*</span>
+        {label} {!isReadOnly && <span className="text-red-500">*</span>}
       </label>
 
       {previewUrl ? (
@@ -169,6 +169,10 @@ const PhotoUploader = ({
               <Trash2 className="h-4 w-4" />
             </button>
           )}
+        </div>
+      ) : isReadOnly ? (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 flex flex-col items-center justify-center p-6 aspect-video text-gray-400 space-y-1">
+          <span className="text-sm font-medium">Sin foto registrada</span>
         </div>
       ) : (
         <button
@@ -343,7 +347,7 @@ const NewLoadForm = ({
     e.preventDefault();
     if (hasDiscrepancy) return;
 
-    if (!fotoTacometroPreview || !fotoTicketPreview) {
+    if (!defaultValues && (!fotoTacometroPreview || !fotoTicketPreview)) {
       toast.error("Ambas fotos (tacómetro y ticket) son obligatorias.");
       return;
     }
@@ -760,7 +764,7 @@ const NewLoadForm = ({
                 setFotoTacometroFile(null);
                 setFotoTacometroPreview(null);
               }}
-              isReadOnly={!!defaultValues?.fotoTacometro}
+              isReadOnly={!!defaultValues}
             />
             <PhotoUploader
               label="Foto del Ticket"
@@ -773,7 +777,7 @@ const NewLoadForm = ({
                 setFotoTicketFile(null);
                 setFotoTicketPreview(null);
               }}
-              isReadOnly={!!defaultValues?.fotoTicket}
+              isReadOnly={!!defaultValues}
             />
           </div>
 
@@ -790,7 +794,7 @@ const NewLoadForm = ({
             <Button
               type="submit"
               className="w-full min-h-[48px] text-base touch-manipulation bg-[#E8470A] hover:bg-[#FF6B2B] sm:w-auto sm:min-h-9"
-              disabled={isSubmitting || hasDiscrepancy || !fotoTacometroPreview || !fotoTicketPreview}
+              disabled={isSubmitting || hasDiscrepancy || (!defaultValues && (!fotoTacometroPreview || !fotoTicketPreview))}
             >
               {isSubmitting ? "Cargando..." : "Guardar"}
             </Button>
