@@ -12,4 +12,6 @@ export interface LoadData {
   kilometers: number;
   date: Date;
   paymentMethod?: string;
+  fotoTacometro?: string;
+  fotoTicket?: string;
 }
