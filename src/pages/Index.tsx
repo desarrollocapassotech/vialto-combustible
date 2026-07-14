@@ -613,6 +613,7 @@ const Index = () => {
                 setIsFormOpen(true);
               }}
               onDelete={handleDeleteLoad}
+              showDelete={userRole !== "CHOFER"}
             />
           </div>
           )}
