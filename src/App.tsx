@@ -14,17 +14,39 @@ import EmpresaConfig from "./pages/EmpresaConfig";
 
 const queryClient = new QueryClient();
 
+// Función auxiliar para saber si el usuario ya tiene sesión activa
+const isAuthenticated = () => {
+  return !!localStorage.getItem("vialtoToken");
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route
+            path="/"
+            element={
+              <Navigate to={isAuthenticated() ? "/inicio" : "/login"} replace />
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              isAuthenticated() ? <Navigate to="/inicio" replace /> : <Login />
+            }
+          />
+          <Route
+            path="/login-administrador"
+            element={
+              isAuthenticated() ? (
+                <Navigate to="/inicio" replace />
+              ) : (
+                <LoginAdmin />
+              )
+            }
+          />
 
-          {/* Rutas públicas */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/login-administrador" element={<LoginAdmin />} />
-          {/* Rutas protegidas */}
           <Route
             path="/inicio"
             element={
