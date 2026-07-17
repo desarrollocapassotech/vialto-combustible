@@ -24,6 +24,7 @@ serviceAccountKey.json
 *.sln
 *.sw?
 
+*.env
 .env
 .env.*
 env.*
