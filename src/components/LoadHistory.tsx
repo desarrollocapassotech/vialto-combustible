@@ -6,6 +6,7 @@ interface LoadHistoryProps {
   filter: string;
   onEdit: (load: LoadData) => void;
   onDelete: (id: string) => void;
+  showDelete?: boolean;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -43,7 +44,7 @@ const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: bo
   </button>
 );
 
-const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
+const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: LoadHistoryProps) => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const filtered = loads.filter(
@@ -100,9 +101,9 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
                 <p className="font-medium">${fmtNum(load.totalAmount)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className={showDelete ? "grid grid-cols-2 gap-2 pt-1" : "pt-1"}>
               <BtnEdit onClick={() => onEdit(load)} fullWidth />
-              <BtnDelete onClick={() => onDelete(load.id)} fullWidth />
+              {showDelete && <BtnDelete onClick={() => onDelete(load.id)} fullWidth />}
             </div>
           </div>
         ))}
@@ -133,7 +134,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete }: LoadHistoryProps) => {
                 <td className="px-4 py-2.5">
                   <div className="flex gap-2">
                     <BtnEdit onClick={() => onEdit(load)} />
-                    <BtnDelete onClick={() => onDelete(load.id)} />
+                    {showDelete && <BtnDelete onClick={() => onDelete(load.id)} />}
                   </div>
                 </td>
               </tr>
