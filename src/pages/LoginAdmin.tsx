@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useNavigate } from "react-router-dom"; // Si usas React Router
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   signInWithEmailAndPassword,
@@ -9,16 +9,15 @@ import {
   signInWithPopup,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore"; // Importar Firestore utilities
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/firebase";
 import VialtoLogo from "@/components/VialtoLogo";
 
 const LoginAdmin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const navigate = useNavigate(); // Para redirigir al usuario
+  const navigate = useNavigate();
 
-  // Proveedor de autenticación de Google
   const googleProvider = new GoogleAuthProvider();
 
   const fetchAndStoreUser = async (uid: string) => {
@@ -26,7 +25,12 @@ const LoginAdmin = () => {
     const userDocSnapshot = await getDoc(userDocRef);
     if (!userDocSnapshot.exists()) return null;
     const userData = userDocSnapshot.data();
-    const stored = { ...userData, id: uid } as { id: string; role?: string; name?: string; [key: string]: any };
+    const stored = { ...userData, id: uid } as {
+      id: string;
+      role?: string;
+      name?: string;
+      [key: string]: any;
+    };
     localStorage.setItem("user", JSON.stringify(stored));
     return stored;
   };
@@ -34,17 +38,31 @@ const LoginAdmin = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
       const user = userCredential.user;
+
+      // <-- NUEVO: Obtenemos el token de Firebase
+      const token = await user.getIdToken();
+
       const userData = await fetchAndStoreUser(user.uid);
       if (!userData) {
-        toast.error("Usuario no encontrado. Contactá al administrador del sistema.");
+        toast.error(
+          "Usuario no encontrado. Contactá al administrador del sistema.",
+        );
         return;
       }
       if (userData.role !== "ADMIN" && userData.role !== "SUPER_ADMIN") {
         toast.error("Acceso denegado. Esta ruta es solo para administradores.");
         return;
       }
+
+      // <-- NUEVO: Guardamos el token para que App.tsx sepa que estamos logueados
+      localStorage.setItem("vialtoToken", token);
+
       toast.success(`Bienvenido, ${userData.name || user.email}`);
       navigate("/inicio");
     } catch (error) {
@@ -57,15 +75,25 @@ const LoginAdmin = () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
+
+      // <-- NUEVO: Obtenemos el token de Firebase
+      const token = await user.getIdToken();
+
       const userData = await fetchAndStoreUser(user.uid);
       if (!userData) {
-        toast.error("Usuario no encontrado. Contactá al administrador del sistema.");
+        toast.error(
+          "Usuario no encontrado. Contactá al administrador del sistema.",
+        );
         return;
       }
       if (userData.role !== "ADMIN" && userData.role !== "SUPER_ADMIN") {
         toast.error("Acceso denegado. Esta ruta es solo para administradores.");
         return;
       }
+
+      // <-- NUEVO: Guardamos el token para que App.tsx sepa que estamos logueados
+      localStorage.setItem("vialtoToken", token);
+
       toast.success(`Bienvenido, ${userData.name || user.email}`);
       navigate("/inicio");
     } catch (error) {
@@ -74,7 +102,6 @@ const LoginAdmin = () => {
     }
   };
 
-  // Manejar el restablecimiento de contraseña
   const handleForgotPassword = async () => {
     if (!email) {
       toast.error("Por favor, ingresa tu correo electrónico.");
@@ -82,14 +109,15 @@ const LoginAdmin = () => {
     }
 
     try {
-      // Enviar correo de restablecimiento de contraseña
       await sendPasswordResetEmail(auth, email);
       toast.success(
-        `Se ha enviado un correo de restablecimiento de contraseña a ${email}.`
+        `Se ha enviado un correo de restablecimiento de contraseña a ${email}.`,
       );
     } catch (error) {
       console.error("Error al enviar el correo de restablecimiento:", error);
-      toast.error("No se pudo enviar el correo de restablecimiento. Verifica el correo.");
+      toast.error(
+        "No se pudo enviar el correo de restablecimiento. Verifica el correo.",
+      );
     }
   };
 
@@ -97,15 +125,16 @@ const LoginAdmin = () => {
     <div className="min-h-screen bg-[#1A1A1A] flex flex-col items-center justify-center px-4">
       <div className="text-center mb-8">
         <VialtoLogo variant="dark" showTagline className="mx-auto mb-4" />
-        <h2 className="text-xl font-display font-normal text-white sm:text-2xl mt-4 tracking-tight">Iniciar Sesión</h2>
-        <p className="text-sm text-gray-300">Sistema de registro de cargas de combustible</p>
+        <h2 className="text-xl font-display font-normal text-white sm:text-2xl mt-4 tracking-tight">
+          Iniciar Sesión
+        </h2>
+        <p className="text-sm text-gray-300">
+          Sistema de registro de cargas de combustible
+        </p>
       </div>
 
-      {/* Contenedor principal (formulario) */}
       <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md space-y-4">
-        {/* Formulario de inicio de sesión */}
         <form onSubmit={handleLogin} className="space-y-4">
-          {/* Campo de correo electrónico */}
           <Input
             type="email"
             placeholder="Correo electrónico"
@@ -114,7 +143,6 @@ const LoginAdmin = () => {
             className="w-full border-gray-300 focus:border-[#E8470A] focus:ring-[#E8470A]"
             required
           />
-          {/* Campo de contraseña */}
           <Input
             type="password"
             placeholder="Contraseña"
@@ -123,7 +151,6 @@ const LoginAdmin = () => {
             className="w-full border-gray-300 focus:border-[#E8470A] focus:ring-[#E8470A]"
             required
           />
-          {/* Botón de inicio de sesión */}
           <Button
             type="submit"
             className="w-full bg-[#E8470A] hover:bg-[#FF6B2B] text-white transition-colors py-2"
@@ -132,7 +159,6 @@ const LoginAdmin = () => {
           </Button>
         </form>
 
-        {/* Enlace para restablecer la contraseña */}
         <div className="text-center">
           <button
             onClick={handleForgotPassword}
@@ -142,14 +168,12 @@ const LoginAdmin = () => {
           </button>
         </div>
 
-        {/* Separador */}
         <div className="flex items-center gap-4">
           <hr className="flex-grow border-gray-300" />
           <span className="text-gray-500 text-sm">O</span>
           <hr className="flex-grow border-gray-300" />
         </div>
 
-        {/* Botón de inicio de sesión con Google */}
         <Button
           onClick={handleGoogleLogin}
           className="w-full bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 transition-colors py-2 flex items-center justify-center gap-2"
@@ -190,7 +214,6 @@ const LoginAdmin = () => {
         </div>
       </div>
 
-      {/* Texto de desarrollo y enlace */}
       <div className="mt-8 text-center text-white/50 text-sm font-sans">
         <span>Vialto · Sistema de registro de combustible</span>
       </div>
