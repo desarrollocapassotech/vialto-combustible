@@ -11,7 +11,7 @@
 function baseUrl(): string {
   // En dev, el proxy de Vite (puerto 5174) reenvía /api → backend (8080).
   // Usar URL relativa para que el proxy funcione; en producción VITE_API_URL apunta al backend.
-  return import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
+  return import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
 }
 
 export type TokenGetter = () => Promise<string | null>;
@@ -23,7 +23,7 @@ export class ApiError extends Error {
     public body?: unknown,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
   }
 }
 
@@ -33,16 +33,25 @@ export async function apiFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   const token = await getToken();
-  const url = `${baseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
+  const url = `${baseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = new Headers(init.headers);
-  headers.set('Accept', 'application/json');
+  headers.set("Accept", "application/json");
   if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
   }
-  if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
+  if (
+    init.body &&
+    !headers.has("Content-Type") &&
+    !(init.body instanceof FormData)
+  ) {
+    headers.set("Content-Type", "application/json");
   }
-  return fetch(url, { ...init, headers, credentials: 'include', cache: 'no-store' });
+  return fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+    cache: "no-store",
+  });
 }
 
 export async function apiJson<T>(
@@ -53,6 +62,7 @@ export async function apiJson<T>(
   const res = await apiFetch(path, getToken, init);
   const text = await res.text();
   let data: unknown = undefined;
+
   if (text) {
     try {
       data = JSON.parse(text) as unknown;
@@ -60,12 +70,28 @@ export async function apiJson<T>(
       data = text;
     }
   }
+
   if (!res.ok) {
+    // Si la sesión expiró o el token es inválido
+    if (res.status === 401) {
+      localStorage.removeItem("vialtoToken");
+      localStorage.removeItem("user");
+
+      // Evitar loop de recargas si ya estamos en una página de login
+      if (
+        window.location.pathname !== "/login" &&
+        window.location.pathname !== "/login-administrador"
+      ) {
+        window.location.href = "/login";
+      }
+    }
+
     const msg =
-      typeof data === 'object' && data !== null && 'message' in data
+      typeof data === "object" && data !== null && "message" in data
         ? String((data as { message: unknown }).message)
         : res.statusText;
-    throw new ApiError(msg || 'Respuesta no válida', res.status, data);
+    throw new ApiError(msg || "Respuesta no válida", res.status, data);
   }
+
   return data as T;
 }
