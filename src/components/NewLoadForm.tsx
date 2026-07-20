@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { apiJson } from "@/lib/api";
 import { Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,7 +37,10 @@ function formatAmountFromNumber(n: number, prefix = ""): string {
 }
 
 function parseAmount(formatted: string): number {
-  const normalized = formatted.replace(/^\$/, "").replace(/\./g, "").replace(",", ".");
+  const normalized = formatted
+    .replace(/^\$/, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
   return parseFloat(normalized) || 0;
 }
 
@@ -85,16 +92,19 @@ function parsePatente(formatted: string): string {
 }
 
 function isPatenteMercosur(value: string): boolean {
-  const raw = value.replace(/\s/g, "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const raw = value
+    .replace(/\s/g, "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
   const firstDigitIdx = raw.search(/\d/);
-  return (
-    firstDigitIdx === 2 ||
-    (raw.length === 2 && /^[A-Z]{2}$/.test(raw))
-  );
+  return firstDigitIdx === 2 || (raw.length === 2 && /^[A-Z]{2}$/.test(raw));
 }
 
 function isPatenteAbc123(value: string): boolean {
-  const raw = value.replace(/\s/g, "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const raw = value
+    .replace(/\s/g, "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
   if (!raw) return false;
   const firstDigitIdx = raw.search(/\d/);
   return firstDigitIdx === 3 || firstDigitIdx === 0;
@@ -182,7 +192,9 @@ const PhotoUploader = ({
         >
           <Camera className="h-8 w-8 text-gray-400 group-hover:text-[#E8470A]" />
           <span className="text-sm font-medium">Capturar o subir foto</span>
-          <span className="text-xs text-gray-400">JPG, PNG o WEBP de hasta 10 MB</span>
+          <span className="text-xs text-gray-400">
+            JPG, PNG o WEBP de hasta 10 MB
+          </span>
           <input
             ref={fileInputRef}
             type="file"
@@ -206,7 +218,10 @@ const NewLoadForm = ({
   onClearKmError,
 }: NewLoadFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [prevKmInfo, setPrevKmInfo] = useState<{ km: number; fecha: string } | null>(null);
+  const [prevKmInfo, setPrevKmInfo] = useState<{
+    km: number;
+    fecha: string;
+  } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLicensePlateEnabled, setIsLicensePlateEnabled] = useState(false);
   const [isStationSheetOpen, setIsStationSheetOpen] = useState(false);
@@ -214,12 +229,12 @@ const NewLoadForm = ({
 
   // Estados para fotos y previsualización
   const [fotoTacometroFile, setFotoTacometroFile] = useState<File | null>(null);
-  const [fotoTacometroPreview, setFotoTacometroPreview] = useState<string | null>(
-    defaultValues?.fotoTacometro || null
-  );
+  const [fotoTacometroPreview, setFotoTacometroPreview] = useState<
+    string | null
+  >(defaultValues?.fotoTacometro || null);
   const [fotoTicketFile, setFotoTicketFile] = useState<File | null>(null);
   const [fotoTicketPreview, setFotoTicketPreview] = useState<string | null>(
-    defaultValues?.fotoTicket || null
+    defaultValues?.fotoTicket || null,
   );
 
   // Estado del formulario
@@ -245,23 +260,29 @@ const NewLoadForm = ({
         liters: formatAmountFromNumber(
           typeof defaultValues.liters === "number"
             ? defaultValues.liters
-            : parseFloat(String(defaultValues.liters).replace(",", ".")) || 0
+            : parseFloat(String(defaultValues.liters).replace(",", ".")) || 0,
         ),
         pricePerLiter: formatAmountFromNumber(
           typeof defaultValues.pricePerLiter === "number"
             ? defaultValues.pricePerLiter
-            : parseFloat(String(defaultValues.pricePerLiter || "").replace(",", ".")) || 0
+            : parseFloat(
+                String(defaultValues.pricePerLiter || "").replace(",", "."),
+              ) || 0,
         ),
         totalAmount: formatAmountFromNumber(
           typeof defaultValues.totalAmount === "number"
             ? defaultValues.totalAmount
-            : parseFloat(String(defaultValues.totalAmount).replace(",", ".")) || 0,
-          "$"
+            : parseFloat(String(defaultValues.totalAmount).replace(",", ".")) ||
+                0,
+          "$",
         ),
         kilometers: formatIntegerFromNumber(
           typeof defaultValues.kilometers === "number"
             ? defaultValues.kilometers
-            : parseInt(String(defaultValues.kilometers || "").replace(/\./g, ""), 10) || 0
+            : parseInt(
+                String(defaultValues.kilometers || "").replace(/\./g, ""),
+                10,
+              ) || 0,
         ),
         date: defaultValues.date ? new Date(defaultValues.date) : new Date(),
         paymentMethod: defaultValues.paymentMethod || null,
@@ -326,7 +347,10 @@ const NewLoadForm = ({
   const maxAllowedDiff = expectedTotal * 0.01;
   const hasDiscrepancy = hasLitersAndPrice && difference > maxAllowedDiff;
 
-  const uploadFoto = async (file: File, tipo: "tacometro" | "ticket"): Promise<string> => {
+  const uploadFoto = async (
+    file: File,
+    tipo: "tacometro" | "ticket",
+  ): Promise<string> => {
     const token = localStorage.getItem("vialtoToken");
     const formDataUpload = new FormData();
     formDataUpload.append("file", file);
@@ -338,7 +362,7 @@ const NewLoadForm = ({
       {
         method: "POST",
         body: formDataUpload,
-      }
+      },
     );
     return res.url;
   };
@@ -380,7 +404,8 @@ const NewLoadForm = ({
     } catch (error: any) {
       console.error("Error al enviar el formulario:", error);
       toast.error(
-        error?.message || "Ocurrió un error al subir las fotos. Intente nuevamente."
+        error?.message ||
+          "Ocurrió un error al subir las fotos. Intente nuevamente.",
       );
     } finally {
       setIsSubmitting(false);
@@ -393,10 +418,10 @@ const NewLoadForm = ({
   return (
     <DialogContent
       aria-describedby={undefined}
-      className="fixed inset-0 z-50 h-dvh w-full max-w-none translate-x-0 translate-y-0 rounded-none border-0 flex flex-col gap-0 p-0 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:right-auto sm:bottom-auto sm:h-auto sm:max-w-md sm:max-h-[90vh] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:grid sm:gap-4 sm:p-6"
+      className="w-[95vw] max-w-md max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0 sm:p-6 sm:gap-4 bg-white rounded-xl"
     >
-      <div className="flex flex-col flex-1 min-h-0 sm:flex-none sm:min-h-0">
-        <DialogHeader className="flex-shrink-0 px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 border-b border-gray-100 sm:px-0 sm:pt-0 sm:pb-0 sm:border-0 space-y-2">
+      <div className="flex flex-col flex-1 min-h-0">
+        <DialogHeader className="flex-shrink-0 p-4 border-b border-gray-100 sm:p-0 sm:border-0 space-y-2">
           <DialogTitle className="text-center text-xl sm:text-lg">
             {defaultValues ? "Editar Carga" : "Nueva Carga"}
           </DialogTitle>
@@ -408,7 +433,7 @@ const NewLoadForm = ({
         </DialogHeader>
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom)))] space-y-4 sm:flex-none sm:overflow-visible sm:max-h-none sm:pb-4"
+          className="flex-1 overflow-y-auto p-4 space-y-4 sm:overflow-visible sm:flex-none"
         >
           {/* Monto Total - estilo destacado */}
           <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
@@ -421,7 +446,10 @@ const NewLoadForm = ({
               inputMode="decimal"
               value={formData.totalAmount}
               onChange={(e) =>
-                setFormData({ ...formData, totalAmount: formatAmount(e.target.value, "$") })
+                setFormData({
+                  ...formData,
+                  totalAmount: formatAmount(e.target.value, "$"),
+                })
               }
               className="min-h-[64px] w-full text-2xl sm:text-3xl font-semibold py-4 px-5 touch-manipulation bg-white border-2 border-gray-200 rounded-lg shadow-sm text-center placeholder:text-gray-400 focus:border-[#E8470A] focus:ring-2 focus:ring-[#E8470A]/20"
               placeholder="$0,00"
@@ -429,11 +457,16 @@ const NewLoadForm = ({
             {hasLitersAndPrice && (
               <div className="mt-3 pt-3 border-t border-gray-200 text-center space-y-1">
                 <div className="text-sm text-gray-600">
-                  Total esperado: <span className="font-semibold text-gray-800">${formatAmountFromNumber(expectedTotal)}</span>
+                  Total esperado:{" "}
+                  <span className="font-semibold text-gray-800">
+                    ${formatAmountFromNumber(expectedTotal)}
+                  </span>
                 </div>
                 {hasDiscrepancy && (
                   <div className="text-xs font-semibold text-red-600 flex items-center justify-center gap-1">
-                    <span>⚠️ El monto ingresado difiere más del 1% del esperado.</span>
+                    <span>
+                      ⚠️ El monto ingresado difiere más del 1% del esperado.
+                    </span>
                   </div>
                 )}
               </div>
@@ -456,10 +489,11 @@ const NewLoadForm = ({
                   onClick={() =>
                     setFormData({ ...formData, paymentMethod: "EFECTIVO" })
                   }
-                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.paymentMethod === "EFECTIVO"
-                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                    }`}
+                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                    formData.paymentMethod === "EFECTIVO"
+                      ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                  }`}
                 >
                   Efectivo
                 </button>
@@ -468,10 +502,11 @@ const NewLoadForm = ({
                   onClick={() =>
                     setFormData({ ...formData, paymentMethod: "TARJETA" })
                   }
-                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.paymentMethod === "TARJETA"
-                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                    }`}
+                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                    formData.paymentMethod === "TARJETA"
+                      ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                  }`}
                 >
                   Tarjeta
                 </button>
@@ -490,7 +525,10 @@ const NewLoadForm = ({
               inputMode="decimal"
               value={formData.liters}
               onChange={(e) =>
-                setFormData({ ...formData, liters: formatAmount(e.target.value) })
+                setFormData({
+                  ...formData,
+                  liters: formatAmount(e.target.value),
+                })
               }
               className={inputBaseClass}
               placeholder="Ej: 1.234,56"
@@ -508,7 +546,10 @@ const NewLoadForm = ({
               inputMode="decimal"
               value={formData.pricePerLiter}
               onChange={(e) =>
-                setFormData({ ...formData, pricePerLiter: formatAmount(e.target.value) })
+                setFormData({
+                  ...formData,
+                  pricePerLiter: formatAmount(e.target.value),
+                })
               }
               className={inputBaseClass}
               placeholder="Ej: 1.234,56"
@@ -525,7 +566,11 @@ const NewLoadForm = ({
               onClick={() => setIsStationSheetOpen(true)}
               className="min-h-[52px] w-full rounded-xl text-base font-medium touch-manipulation text-left px-4 py-3 bg-white border-2 border-gray-200 hover:border-gray-300 active:bg-gray-50 flex items-center justify-between"
             >
-              <span className={formData.serviceStation ? "text-gray-900" : "text-gray-500"}>
+              <span
+                className={
+                  formData.serviceStation ? "text-gray-900" : "text-gray-500"
+                }
+              >
                 {formData.serviceStation || "Seleccionar estación"}
               </span>
               <svg
@@ -534,10 +579,18 @@ const NewLoadForm = ({
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
-            <Sheet open={isStationSheetOpen} onOpenChange={setIsStationSheetOpen}>
+            <Sheet
+              open={isStationSheetOpen}
+              onOpenChange={setIsStationSheetOpen}
+            >
               <SheetContent side="bottom" className="rounded-t-2xl">
                 <SheetHeader>
                   <SheetTitle>Estación de Servicio</SheetTitle>
@@ -552,14 +605,15 @@ const NewLoadForm = ({
                           setFormData({ ...formData, serviceStation: station });
                           setIsStationSheetOpen(false);
                         }}
-                        className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${formData.serviceStation === station
-                          ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                          }`}
+                        className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                          formData.serviceStation === station
+                            ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                        }`}
                       >
                         {station}
                       </button>
-                    )
+                    ),
                   )}
                 </div>
               </SheetContent>
@@ -577,7 +631,10 @@ const NewLoadForm = ({
               inputMode="numeric"
               value={formData.kilometers}
               onChange={(e) => {
-                setFormData({ ...formData, kilometers: formatInteger(e.target.value) });
+                setFormData({
+                  ...formData,
+                  kilometers: formatInteger(e.target.value),
+                });
                 // Si hay un error de km externo, lo limpiamos al editar
                 if (kmError && onClearKmError) onClearKmError();
               }}
@@ -600,7 +657,9 @@ const NewLoadForm = ({
               </p>
             )}
             {kmError && (
-              <p className="mt-1.5 text-sm text-red-600 font-medium">{kmError}</p>
+              <p className="mt-1.5 text-sm text-red-600 font-medium">
+                {kmError}
+              </p>
             )}
           </div>
 
@@ -678,10 +737,11 @@ const NewLoadForm = ({
               const isMercosur = showPlateDesign(formData.licensePlate);
               return (
                 <div
-                  className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${isMercosur
-                    ? "rounded-lg border-2 border-black"
-                    : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
-                    }`}
+                  className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${
+                    isMercosur
+                      ? "rounded-lg border-2 border-black"
+                      : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
+                  }`}
                 >
                   {/* Capa decorativa - diseño Mercosur (AB 123 CD) */}
                   {isMercosur && (
@@ -693,21 +753,52 @@ const NewLoadForm = ({
                         <div className="w-6 h-4 rounded-sm overflow-hidden flex flex-col shrink-0 border border-white/50 shadow-sm">
                           <div className="h-1/3 bg-[#74ACDF]" />
                           <div className="h-1/3 bg-white flex items-center justify-center">
-                            <svg viewBox="0 0 32 32" className="w-3.5 h-3.5 shrink-0">
+                            <svg
+                              viewBox="0 0 32 32"
+                              className="w-3.5 h-3.5 shrink-0"
+                            >
                               <circle cx="16" cy="16" r="6" fill="#F4B800" />
                               {[...Array(16)].map((_, i) => {
                                 const a = (i * 22.5 * Math.PI) / 180;
-                                const r1 = 6; const r2 = 11;
-                                const x1 = 16 + r1 * Math.cos(a); const y1 = 16 + r1 * Math.sin(a);
-                                const x2 = 16 + r2 * Math.cos(a); const y2 = 16 + r2 * Math.sin(a);
+                                const r1 = 6;
+                                const r2 = 11;
+                                const x1 = 16 + r1 * Math.cos(a);
+                                const y1 = 16 + r1 * Math.sin(a);
+                                const x2 = 16 + r2 * Math.cos(a);
+                                const y2 = 16 + r2 * Math.sin(a);
                                 return i % 2 === 0 ? (
-                                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#F4B800" strokeWidth="1" />
+                                  <line
+                                    key={i}
+                                    x1={x1}
+                                    y1={y1}
+                                    x2={x2}
+                                    y2={y2}
+                                    stroke="#F4B800"
+                                    strokeWidth="1"
+                                  />
                                 ) : (
-                                  <path key={i} d={`M${x1} ${y1} Q${16 + 9 * Math.cos(a)} ${16 + 9 * Math.sin(a)} ${x2} ${y2}`} stroke="#F4B800" strokeWidth="1" fill="none" />
+                                  <path
+                                    key={i}
+                                    d={`M${x1} ${y1} Q${16 + 9 * Math.cos(a)} ${16 + 9 * Math.sin(a)} ${x2} ${y2}`}
+                                    stroke="#F4B800"
+                                    strokeWidth="1"
+                                    fill="none"
+                                  />
                                 );
                               })}
-                              <circle cx="16" cy="14.5" r="0.6" fill="#B8860B" />
-                              <path d="M14.5 16.5 Q16 17.5 17.5 16.5" stroke="#B8860B" strokeWidth="0.5" fill="none" strokeLinecap="round" />
+                              <circle
+                                cx="16"
+                                cy="14.5"
+                                r="0.6"
+                                fill="#B8860B"
+                              />
+                              <path
+                                d="M14.5 16.5 Q16 17.5 17.5 16.5"
+                                stroke="#B8860B"
+                                strokeWidth="0.5"
+                                fill="none"
+                                strokeLinecap="round"
+                              />
                             </svg>
                           </div>
                           <div className="h-1/3 bg-[#74ACDF]" />
@@ -729,21 +820,30 @@ const NewLoadForm = ({
                   )}
                   {/* Un solo input - centrado en el área de contenido de cada diseño */}
                   <div
-                    className={`absolute left-0 right-0 flex items-center justify-center px-3 py-2 z-10 ${isMercosur ? "top-[26%] bottom-0" : "left-3 right-3 top-[28%] bottom-[8%]"
-                      }`}
+                    className={`absolute left-0 right-0 flex items-center justify-center px-3 py-2 z-10 ${
+                      isMercosur
+                        ? "top-[26%] bottom-0"
+                        : "left-3 right-3 top-[28%] bottom-[8%]"
+                    }`}
                   >
                     <input
                       required
                       value={formData.licensePlate}
                       onChange={(e) =>
-                        setFormData({ ...formData, licensePlate: formatPatente(e.target.value) })
+                        setFormData({
+                          ...formData,
+                          licensePlate: formatPatente(e.target.value),
+                        })
                       }
                       inputMode="text"
                       autoCapitalize="characters"
                       disabled={!isLicensePlateEnabled}
                       placeholder={isMercosur ? "AB 123 CD" : "ABC 123"}
-                      className={`w-full h-full min-h-0 text-center font-bold tracking-[0.2em] bg-transparent border-0 outline-none disabled:bg-transparent disabled:cursor-not-allowed leading-tight ${isMercosur ? "text-4xl sm:text-5xl text-black placeholder:text-gray-300" : "text-5xl sm:text-6xl text-white placeholder:text-gray-500"
-                        }`}
+                      className={`w-full h-full min-h-0 text-center font-bold tracking-[0.2em] bg-transparent border-0 outline-none disabled:bg-transparent disabled:cursor-not-allowed leading-tight ${
+                        isMercosur
+                          ? "text-4xl sm:text-5xl text-black placeholder:text-gray-300"
+                          : "text-5xl sm:text-6xl text-white placeholder:text-gray-500"
+                      }`}
                     />
                   </div>
                 </div>
@@ -794,7 +894,12 @@ const NewLoadForm = ({
             <Button
               type="submit"
               className="w-full min-h-[48px] text-base touch-manipulation bg-[#E8470A] hover:bg-[#FF6B2B] sm:w-auto sm:min-h-9"
-              disabled={isSubmitting || hasDiscrepancy || (!defaultValues && (!fotoTacometroPreview || !fotoTicketPreview))}
+              disabled={
+                isSubmitting ||
+                hasDiscrepancy ||
+                (!defaultValues &&
+                  (!fotoTacometroPreview || !fotoTicketPreview))
+              }
             >
               {isSubmitting ? "Cargando..." : "Guardar"}
             </Button>

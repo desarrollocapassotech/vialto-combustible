@@ -23,3 +23,10 @@ serviceAccountKey.json
 *.njsproj
 *.sln
 *.sw?
+
+.env
+.env.*
+env.*
+env.production
+env.qa
+env.local
