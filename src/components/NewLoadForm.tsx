@@ -371,6 +371,11 @@ const NewLoadForm = ({
     e.preventDefault();
     if (hasDiscrepancy) return;
 
+    if (!formData.paymentMethod) {
+      toast.error("El método de pago es obligatorio.");
+      return;
+    }
+
     if (!defaultValues && (!fotoTacometroPreview || !fotoTicketPreview)) {
       toast.error("Ambas fotos (tacómetro y ticket) son obligatorias.");
       return;
@@ -474,45 +479,48 @@ const NewLoadForm = ({
           </div>
 
           {/* Método de Pago - botones tipo segmented control para mobile */}
-          {(defaultValues || formData.paymentMethod) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Método de Pago
-              </label>
-              <div
-                role="group"
-                aria-label="Método de pago"
-                className="grid grid-cols-2 gap-2"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Método de Pago <span className="text-red-500">*</span>
+            </label>
+            <div
+              role="group"
+              aria-label="Método de pago"
+              className="grid grid-cols-2 gap-2"
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData({ ...formData, paymentMethod: "EFECTIVO" })
+                }
+                className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                  formData.paymentMethod === "EFECTIVO"
+                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                }`}
               >
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, paymentMethod: "EFECTIVO" })
-                  }
-                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
-                    formData.paymentMethod === "EFECTIVO"
-                      ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                  }`}
-                >
-                  Efectivo
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setFormData({ ...formData, paymentMethod: "TARJETA" })
-                  }
-                  className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
-                    formData.paymentMethod === "TARJETA"
-                      ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
-                  }`}
-                >
-                  Tarjeta
-                </button>
-              </div>
+                Efectivo
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData({ ...formData, paymentMethod: "TARJETA" })
+                }
+                className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                  formData.paymentMethod === "TARJETA"
+                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                }`}
+              >
+                Tarjeta
+              </button>
             </div>
-          )}
+            {!formData.paymentMethod && (
+              <p className="mt-1.5 text-xs text-red-500 font-medium">
+                Seleccione un método de pago.
+              </p>
+            )}
+          </div>
 
           {/* Litros Cargados */}
           <div>
@@ -897,6 +905,7 @@ const NewLoadForm = ({
               disabled={
                 isSubmitting ||
                 hasDiscrepancy ||
+                !formData.paymentMethod ||
                 (!defaultValues &&
                   (!fotoTacometroPreview || !fotoTicketPreview))
               }

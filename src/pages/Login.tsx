@@ -41,7 +41,9 @@ function loadSavedLogin(): Partial<SavedLogin> | null {
 
 const Login = () => {
   const [dni, setDni] = useState(() => loadSavedLogin()?.dni ?? "");
-  const [password, setPassword] = useState(() => loadSavedLogin()?.password ?? "");
+  const [password, setPassword] = useState(
+    () => loadSavedLogin()?.password ?? "",
+  );
   const [saveCredentials, setSaveCredentials] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -56,7 +58,7 @@ const Login = () => {
         {
           method: "POST",
           body: JSON.stringify({ dni, pin: password }),
-        }
+        },
       );
 
       // Adapta la respuesta del backend al formato que ya consumen Index.tsx / NavBar.
@@ -75,7 +77,7 @@ const Login = () => {
       if (saveCredentials) {
         localStorage.setItem(
           LOGIN_SAVE_KEY,
-          JSON.stringify({ dni, password } satisfies SavedLogin)
+          JSON.stringify({ dni, password } satisfies SavedLogin),
         );
       } else {
         localStorage.removeItem(LOGIN_SAVE_KEY);
@@ -99,7 +101,9 @@ const Login = () => {
     <div className="min-h-screen bg-[#1A1A1A] flex flex-col items-center justify-center px-4">
       <div className="text-center mb-8">
         <VialtoLogo variant="dark" showTagline className="mx-auto mb-4" />
-        <p className="text-sm text-gray-300 mt-2">Ingresá tus datos para registrar las cargas</p>
+        <p className="text-sm text-gray-300 mt-2">
+          Ingresá tus datos para registrar las cargas
+        </p>
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md space-y-4">
@@ -125,7 +129,9 @@ const Login = () => {
             <Checkbox
               id="saveCredentials"
               checked={saveCredentials}
-              onCheckedChange={(checked) => setSaveCredentials(checked === true)}
+              onCheckedChange={(checked) =>
+                setSaveCredentials(checked === true)
+              }
             />
             <label
               htmlFor="saveCredentials"
@@ -141,7 +147,6 @@ const Login = () => {
           >
             {isLoading ? "Entrando..." : "Iniciar Sesión"}
           </Button>
-
         </form>
       </div>
 
