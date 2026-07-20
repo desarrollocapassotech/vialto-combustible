@@ -24,7 +24,10 @@ serviceAccountKey.json
 *.sln
 *.sw?
 
+<<<<<<< HEAD
+=======
 *.env
+>>>>>>> e21ceff6ee1b265bbc583b666729c66bc7641992
 .env
 .env.*
 env.*
