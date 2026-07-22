@@ -318,6 +318,7 @@ const NewLoadForm = ({
   }, [defaultValues, driverName, licensePlate]);
 
   // Consultar el último km registrado para la patente ingresada
+  // Consultar el último km registrado para la patente ingresada
   useEffect(() => {
     const plate = parsePatente(formData.licensePlate);
     const token = localStorage.getItem("vialtoToken");
@@ -330,6 +331,9 @@ const NewLoadForm = ({
       try {
         const qs = new URLSearchParams({ patente: plate });
         if (defaultValues?.id) qs.set("excludeId", defaultValues.id);
+
+        qs.set("_t", Date.now().toString());
+
         const data = await apiJson<{ km: number; fecha: string } | null>(
           `/api/combustible/chofer/ultimo-km?${qs.toString()}`,
           async () => token,
