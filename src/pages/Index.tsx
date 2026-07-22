@@ -20,7 +20,7 @@ import {
   orderBy,
   deleteDoc,
   addDoc,
-  updateDoc
+  updateDoc,
 } from "firebase/firestore";
 import { userConverter } from "@/converters/userConverter";
 import { loadConverter } from "@/converters/loadConverter";
@@ -111,6 +111,7 @@ const Index = () => {
   const [monthlyLoadCount, setMonthlyLoadCount] = useState<number | null>(null);
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthValue);
+  const [formKey, setFormKey] = useState(0); // <-- ESTADO AGREGADO
   const navigate = useNavigate();
   const logoUrl = useEmpresaLogo(empresaId);
 
@@ -139,7 +140,9 @@ const Index = () => {
 
         const user = auth.currentUser;
         if (user) {
-          const userDocRef = doc(db, "usuarios", user.uid).withConverter(userConverter);
+          const userDocRef = doc(db, "usuarios", user.uid).withConverter(
+            userConverter,
+          );
           const userDocSnapshot = await getDoc(userDocRef);
 
           if (userDocSnapshot.exists()) {
@@ -150,7 +153,10 @@ const Index = () => {
             setUserLicensePlate(userData.patente);
             setEmpresaId(userData.empresaId ?? null);
 
-            localStorage.setItem("user", JSON.stringify({ ...userData, id: user.uid }));
+            localStorage.setItem(
+              "user",
+              JSON.stringify({ ...userData, id: user.uid }),
+            );
 
             if (userData.role === "SUPER_ADMIN") {
               const sid = sessionStorage.getItem(SUPER_ADMIN_EMPRESA_KEY);
@@ -184,7 +190,9 @@ const Index = () => {
       "/api/combustible/chofer/ultima-carga",
       async () => token,
     )
-      .then((data) => { if (data?.patente) setLastUsedPlate(data.patente); })
+      .then((data) => {
+        if (data?.patente) setLastUsedPlate(data.patente);
+      })
       .catch(() => {});
   }, [userRole]);
 
@@ -240,10 +248,12 @@ const Index = () => {
       try {
         const q = query(
           collection(db, "empresas").withConverter(empresaConverter),
-          orderBy("nombre")
+          orderBy("nombre"),
         );
         const snapshot = await getDocs(q);
-        setEmpresas(snapshot.docs.map((d) => ({ id: d.id, nombre: d.data().nombre })));
+        setEmpresas(
+          snapshot.docs.map((d) => ({ id: d.id, nombre: d.data().nombre })),
+        );
       } catch (error) {
         console.error("Error al cargar empresas:", error);
       }
@@ -258,7 +268,7 @@ const Index = () => {
           const driversQuery = query(
             collection(db, "usuarios"),
             where("empresaId", "==", empresaId),
-            where("role", "==", "CHOFER")
+            where("role", "==", "CHOFER"),
           );
           const querySnapshot = await getDocs(driversQuery);
           setDriverCount(querySnapshot.size);
@@ -283,7 +293,7 @@ const Index = () => {
             collection(db, "cargas"),
             where("empresaId", "==", empresaId),
             where("date", ">=", startOfThisMonth),
-            where("date", "<=", endOfThisMonth)
+            where("date", "<=", endOfThisMonth),
           );
 
           const querySnapshot = await getDocs(monthlyLoadsQuery);
@@ -311,7 +321,10 @@ const Index = () => {
     try {
       if (userRole === "CHOFER") {
         const token = localStorage.getItem("vialtoToken");
-        if (!token) { navigate("/login"); return; }
+        if (!token) {
+          navigate("/login");
+          return;
+        }
         const getToken = async () => token;
         const apiPayload = {
           patente: data.licensePlate,
@@ -334,7 +347,9 @@ const Index = () => {
             { method: "PATCH", body: JSON.stringify(apiPayload) },
           );
           setLoads((prev) =>
-            prev.map((l) => (l.id === editLoad.id ? mapCargaToLoadData(updated) : l))
+            prev.map((l) =>
+              l.id === editLoad.id ? mapCargaToLoadData(updated) : l,
+            ),
           );
           setKmError(null);
           toast.success("Carga actualizada exitosamente");
@@ -347,11 +362,13 @@ const Index = () => {
           );
           setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
           setKmError(null);
-          if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+          if (created.vehiculo?.patente)
+            setLastUsedPlate(created.vehiculo.patente);
           toast.success("Carga registrada exitosamente");
         }
         setIsFormOpen(false);
         setEditLoad(null);
+        setFormKey((prev) => prev + 1); // <-- ACTUALIZACIÓN DE LA KEY ACÁ
         return;
       }
 
@@ -363,21 +380,24 @@ const Index = () => {
         empresaId,
       } as LoadData;
       if (editLoad) {
-        const loadDocRef = doc(db, "cargas", editLoad.id!).withConverter(loadConverter);
+        const loadDocRef = doc(db, "cargas", editLoad.id!).withConverter(
+          loadConverter,
+        );
         await updateDoc(loadDocRef, payload as any);
         setLoads((prev) =>
-          prev.map((l) => (l.id === editLoad.id ? { ...l, ...payload } : l))
+          prev.map((l) => (l.id === editLoad.id ? { ...l, ...payload } : l)),
         );
         toast.success("Carga actualizada exitosamente");
       } else {
         const newLoadRef = await addDoc(
           collection(db, "cargas").withConverter(loadConverter),
-          payload
+          payload,
         );
         setLoads((prev) => [...prev, { id: newLoadRef.id, ...payload }]);
         toast.success("Carga registrada exitosamente");
       }
       setIsFormOpen(false);
+      setFormKey((prev) => prev + 1); // <-- ACTUALIZACIÓN DE LA KEY ACÁ
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         localStorage.removeItem("user");
@@ -386,10 +406,12 @@ const Index = () => {
         return;
       }
       console.error("Error al manejar la carga:", error);
-      const msg = error instanceof ApiError && error.message
-        ? error.message
-        : "Error al registrar o actualizar la carga";
-      const isKmError = typeof msg === "string" && msg.toLowerCase().includes("km");
+      const msg =
+        error instanceof ApiError && error.message
+          ? error.message
+          : "Error al registrar o actualizar la carga";
+      const isKmError =
+        typeof msg === "string" && msg.toLowerCase().includes("km");
       if (isKmError) {
         setKmError(msg);
       } else {
@@ -403,7 +425,10 @@ const Index = () => {
     try {
       if (userRole === "CHOFER") {
         const token = localStorage.getItem("vialtoToken");
-        if (!token) { navigate("/login"); return; }
+        if (!token) {
+          navigate("/login");
+          return;
+        }
         await apiJson<{ deleted: string }>(
           `/api/combustible/chofer/cargas/${id}`,
           async () => token,
@@ -452,7 +477,9 @@ const Index = () => {
       <NavBar
         userRole={userRole}
         userName={userName}
-        showChoferesLink={!!(userRole === "ADMIN" || (userRole === "SUPER_ADMIN" && empresaId))}
+        showChoferesLink={
+          !!(userRole === "ADMIN" || (userRole === "SUPER_ADMIN" && empresaId))
+        }
         logoUrl={logoUrl ?? undefined}
       />
 
@@ -465,7 +492,9 @@ const Index = () => {
           {/* Bienvenida */}
           {userName && (
             <div className="text-center">
-              <h1 className="text-2xl font-display font-normal text-[#1A1A1A] tracking-tight">Bienvenido, {userName}</h1>
+              <h1 className="text-2xl font-display font-normal text-[#1A1A1A] tracking-tight">
+                Bienvenido, {userName}
+              </h1>
               <p className="text-sm text-gray-500">
                 {userRole === "CHOFER"
                   ? "Chofer"
@@ -487,11 +516,17 @@ const Index = () => {
               >
                 <Building2 className="h-8 w-8 text-[#E8470A]" />
                 <div className="flex flex-col">
-                  <span className="text-sm text-gray-500">Gestión de Empresas</span>
-                  <span className="text-base text-[#E8470A]">Crear y administrar empresas</span>
+                  <span className="text-sm text-gray-500">
+                    Gestión de Empresas
+                  </span>
+                  <span className="text-base text-[#E8470A]">
+                    Crear y administrar empresas
+                  </span>
                 </div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-800">Ingresar a una empresa</h3>
+              <h3 className="text-lg font-semibold text-gray-800">
+                Ingresar a una empresa
+              </h3>
               <div className="space-y-2">
                 {empresas.map((e) => (
                   <div
@@ -504,7 +539,9 @@ const Index = () => {
                   </div>
                 ))}
                 {empresas.length === 0 && (
-                  <p className="text-gray-500 text-sm">No hay empresas registradas.</p>
+                  <p className="text-gray-500 text-sm">
+                    No hay empresas registradas.
+                  </p>
                 )}
               </div>
             </div>
@@ -523,7 +560,8 @@ const Index = () => {
           )}
 
           {/* Tarjetas Admin (o Super Admin dentro de empresa) */}
-          {(userRole === "ADMIN" || (userRole === "SUPER_ADMIN" && empresaId)) && (
+          {(userRole === "ADMIN" ||
+            (userRole === "SUPER_ADMIN" && empresaId)) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {driverCount !== null && (
                 <div
@@ -532,8 +570,12 @@ const Index = () => {
                 >
                   <Truck className="h-8 w-8 text-[#E8470A]" />
                   <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">Choferes Registrados</span>
-                    <span className="text-2xl font-bold text-[#E8470A]">{driverCount}</span>
+                    <span className="text-sm text-gray-500">
+                      Choferes Registrados
+                    </span>
+                    <span className="text-2xl font-bold text-[#E8470A]">
+                      {driverCount}
+                    </span>
                   </div>
                 </div>
               )}
@@ -544,8 +586,12 @@ const Index = () => {
                 >
                   <Calendar className="h-8 w-8 text-[#E8470A]" />
                   <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">Cargas este mes</span>
-                    <span className="text-2xl font-bold text-[#E8470A]">{monthlyLoadCount}</span>
+                    <span className="text-sm text-gray-500">
+                      Cargas este mes
+                    </span>
+                    <span className="text-2xl font-bold text-[#E8470A]">
+                      {monthlyLoadCount}
+                    </span>
                   </div>
                 </a>
               )}
@@ -567,7 +613,10 @@ const Index = () => {
               </Button>
               <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm px-3 py-2">
                 <Calendar className="h-4 w-4 text-[#E8470A]" />
-                <label htmlFor="mes-filtro" className="text-sm text-gray-500 whitespace-nowrap">
+                <label
+                  htmlFor="mes-filtro"
+                  className="text-sm text-gray-500 whitespace-nowrap"
+                >
                   Mes:
                 </label>
                 <input
@@ -582,14 +631,16 @@ const Index = () => {
           )}
 
           {/* Exportación de datos */}
-          {(userRole === "ADMIN" || (userRole === "SUPER_ADMIN" && empresaId)) && (
+          {(userRole === "ADMIN" ||
+            (userRole === "SUPER_ADMIN" && empresaId)) && (
             <div className="bg-white rounded-lg shadow-md p-4">
               <ExportData loads={filteredLoads} />
             </div>
           )}
 
           {/* Filtro */}
-          {(userRole === "ADMIN" || (userRole === "SUPER_ADMIN" && empresaId)) && (
+          {(userRole === "ADMIN" ||
+            (userRole === "SUPER_ADMIN" && empresaId)) && (
             <div className="bg-white rounded-lg shadow-md p-4">
               <Input
                 type="text"
@@ -603,32 +654,38 @@ const Index = () => {
 
           {/* Historial de cargas (no para super admin sin empresa) */}
           {(userRole !== "SUPER_ADMIN" || empresaId) && (
-          <div id="historial" className="bg-white rounded-lg shadow-md p-4">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Historial de Cargas</h2>
-            <LoadHistory
-              loads={filteredLoads}
-              filter={filter}
-              onEdit={(load) => {
-                setEditLoad(load);
-                setIsFormOpen(true);
-              }}
-              onDelete={handleDeleteLoad}
-              showDelete={userRole !== "CHOFER"}
-            />
-          </div>
+            <div id="historial" className="bg-white rounded-lg shadow-md p-4">
+              <h2 className="text-xl font-semibold mb-4 text-gray-800">
+                Historial de Cargas
+              </h2>
+              <LoadHistory
+                loads={filteredLoads}
+                filter={filter}
+                onEdit={(load) => {
+                  setEditLoad(load);
+                  setIsFormOpen(true);
+                }}
+                onDelete={handleDeleteLoad}
+                showDelete={userRole !== "CHOFER"}
+              />
+            </div>
           )}
         </motion.div>
       </main>
 
       {/* Diálogo para formulario */}
-      <Dialog open={isFormOpen} onOpenChange={(open) => {
-        setIsFormOpen(open);
-        if (!open) {
-          setEditLoad(null);
-          setKmError(null);
-        }
-      }}>
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) {
+            setEditLoad(null);
+            setKmError(null);
+          }
+        }}
+      >
         <NewLoadForm
+          key={formKey} // <-- KEY AGREGADA ACÁ
           onSubmit={handleNewLoad}
           onCancel={() => {
             setIsFormOpen(false);
@@ -637,13 +694,17 @@ const Index = () => {
           }}
           defaultValues={editLoad}
           driverName={userName || ""}
-          licensePlate={editLoad ? (editLoad.licensePlate ?? "") : (lastUsedPlate || userLicensePlate || "")}
+          licensePlate={
+            editLoad
+              ? (editLoad.licensePlate ?? "")
+              : lastUsedPlate || userLicensePlate || ""
+          }
           kmError={kmError}
           onClearKmError={() => setKmError(null)}
         />
       </Dialog>
     </div>
   );
-}
+};
 
 export default Index;
