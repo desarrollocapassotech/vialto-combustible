@@ -247,7 +247,10 @@ const NewLoadForm = ({
     totalAmount: "",
     kilometers: "",
     date: new Date(),
-    paymentMethod: defaultValues?.paymentMethod || null,
+    // SOLUCIÓN: Normalizar a mayúsculas desde el inicio
+    paymentMethod: defaultValues?.paymentMethod
+      ? String(defaultValues.paymentMethod).toUpperCase()
+      : null,
   });
 
   // Inicializar el formulario con los valores por defecto si existen
@@ -285,7 +288,11 @@ const NewLoadForm = ({
               ) || 0,
         ),
         date: defaultValues.date ? new Date(defaultValues.date) : new Date(),
-        paymentMethod: defaultValues.paymentMethod || null,
+
+        // SOLUCIÓN: Normalizar el dato proveniente del backend (panel admin) a mayúsculas
+        paymentMethod: defaultValues.paymentMethod
+          ? String(defaultValues.paymentMethod).toUpperCase()
+          : null,
       });
       setFotoTacometroPreview(defaultValues.fotoTacometro || null);
       setFotoTicketPreview(defaultValues.fotoTicket || null);
