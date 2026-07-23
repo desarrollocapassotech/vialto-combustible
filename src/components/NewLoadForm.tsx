@@ -247,7 +247,10 @@ const NewLoadForm = ({
     totalAmount: "",
     kilometers: "",
     date: new Date(),
-    paymentMethod: defaultValues?.paymentMethod || null,
+    // SOLUCIÓN: Normalizar a mayúsculas desde el inicio
+    paymentMethod: defaultValues?.paymentMethod
+      ? String(defaultValues.paymentMethod).toUpperCase()
+      : null,
   });
 
   // Inicializar el formulario con los valores por defecto si existen
@@ -285,7 +288,11 @@ const NewLoadForm = ({
               ) || 0,
         ),
         date: defaultValues.date ? new Date(defaultValues.date) : new Date(),
-        paymentMethod: defaultValues.paymentMethod || null,
+
+        // SOLUCIÓN: Normalizar el dato proveniente del backend (panel admin) a mayúsculas
+        paymentMethod: defaultValues.paymentMethod
+          ? String(defaultValues.paymentMethod).toUpperCase()
+          : null,
       });
       setFotoTacometroPreview(defaultValues.fotoTacometro || null);
       setFotoTicketPreview(defaultValues.fotoTicket || null);
@@ -311,6 +318,7 @@ const NewLoadForm = ({
   }, [defaultValues, driverName, licensePlate]);
 
   // Consultar el último km registrado para la patente ingresada
+  // Consultar el último km registrado para la patente ingresada
   useEffect(() => {
     const plate = parsePatente(formData.licensePlate);
     const token = localStorage.getItem("vialtoToken");
@@ -323,6 +331,9 @@ const NewLoadForm = ({
       try {
         const qs = new URLSearchParams({ patente: plate });
         if (defaultValues?.id) qs.set("excludeId", defaultValues.id);
+
+        qs.set("_t", Date.now().toString());
+
         const data = await apiJson<{ km: number; fecha: string } | null>(
           `/api/combustible/chofer/ultimo-km?${qs.toString()}`,
           async () => token,
@@ -423,10 +434,10 @@ const NewLoadForm = ({
   return (
     <DialogContent
       aria-describedby={undefined}
-      className="fixed inset-0 z-50 flex h-dvh w-full max-w-none flex-col gap-0 border-0 p-0 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:h-auto sm:max-h-[90vh] sm:max-w-md sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border overflow-hidden"
+      className="w-[95vw] max-w-md max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0 sm:p-6 sm:gap-4 bg-white rounded-xl"
     >
       <div className="flex flex-col flex-1 min-h-0">
-        <DialogHeader className="flex-shrink-0 px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 border-b border-gray-100 sm:px-6 sm:pt-6 sm:pb-4 space-y-2">
+        <DialogHeader className="flex-shrink-0 p-4 border-b border-gray-100 sm:p-0 sm:border-0 space-y-2">
           <DialogTitle className="text-center text-xl sm:text-lg">
             {defaultValues ? "Editar Carga" : "Nueva Carga"}
           </DialogTitle>
@@ -438,7 +449,7 @@ const NewLoadForm = ({
         </DialogHeader>
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1.5rem,calc(1.5rem+env(safe-area-inset-bottom)))] space-y-4 sm:px-6 sm:pb-6"
+          className="flex-1 overflow-y-auto p-4 space-y-4 sm:overflow-visible sm:flex-none"
         >
           {/* Monto Total - estilo destacado */}
           <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
