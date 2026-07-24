@@ -4,7 +4,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiJson } from "@/lib/api";
+import { apiJson, isNetworkError } from "@/lib/api";
 import { Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -394,15 +394,45 @@ const NewLoadForm = ({
 
     setIsSubmitting(true);
 
+    // Solo aplica en alta de carga nueva: editar una carga ya existente
+    // requiere conexión, igual que antes (fuera del alcance de COMB-07-T2).
+    const isNewLoad = !defaultValues;
+
+    // Si ya sabemos que no hay conexión, evitamos el intento de red. Si hay
+    // conexión (o no podemos saberlo con certeza), intentamos subir igual y
+    // solo caemos al modo offline si la request falla por un error de red.
+    const canAttemptUpload = isNewLoad ? navigator.onLine : true;
+
+    // Sube una foto o, si no hay conexión (solo en alta nueva), devuelve el
+    // File crudo para que se guarde localmente en vez de perderse.
+    const resolvePhoto = async (
+      file: File,
+      tipo: "tacometro" | "ticket",
+    ): Promise<{ url: string; blob: File | null }> => {
+      if (!canAttemptUpload) return { url: "", blob: file };
+      try {
+        return { url: await uploadFoto(file, tipo), blob: null };
+      } catch (error) {
+        if (isNewLoad && isNetworkError(error)) return { url: "", blob: file };
+        throw error;
+      }
+    };
+
     try {
       let fotoTacometroUrl = defaultValues?.fotoTacometro || "";
       let fotoTicketUrl = defaultValues?.fotoTicket || "";
+      let fotoTacometroBlob: File | null = null;
+      let fotoTicketBlob: File | null = null;
 
       if (fotoTacometroFile) {
-        fotoTacometroUrl = await uploadFoto(fotoTacometroFile, "tacometro");
+        const result = await resolvePhoto(fotoTacometroFile, "tacometro");
+        fotoTacometroUrl = result.url;
+        fotoTacometroBlob = result.blob;
       }
       if (fotoTicketFile) {
-        fotoTicketUrl = await uploadFoto(fotoTicketFile, "ticket");
+        const result = await resolvePhoto(fotoTicketFile, "ticket");
+        fotoTicketUrl = result.url;
+        fotoTicketBlob = result.blob;
       }
 
       await onSubmit({
@@ -416,6 +446,8 @@ const NewLoadForm = ({
         paymentMethod: formData.paymentMethod,
         fotoTacometro: fotoTacometroUrl,
         fotoTicket: fotoTicketUrl,
+        fotoTacometroBlob,
+        fotoTicketBlob,
       });
     } catch (error: any) {
       console.error("Error al enviar el formulario:", error);

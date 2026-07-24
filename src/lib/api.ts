@@ -27,6 +27,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * `fetch` rechaza con TypeError cuando la request nunca llega a completarse
+ * a nivel de red (sin conexión, DNS, CORS bloqueado, etc.), a diferencia de
+ * una respuesta HTTP de error (4xx/5xx), que resuelve normalmente y en este
+ * cliente se traduce en ApiError. Esta distinción es la que permite decidir
+ * si conviene reintentar/guardar localmente o mostrar el error tal cual.
+ */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
 export async function apiFetch(
   path: string,
   getToken: TokenGetter,

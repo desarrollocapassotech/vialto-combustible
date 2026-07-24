@@ -14,4 +14,6 @@ export interface LoadData {
   paymentMethod?: string;
   fotoTacometro?: string;
   fotoTicket?: string;
+  /** true si es una carga guardada localmente, aún no sincronizada con el backend (COMB-07-T2). */
+  pending?: boolean;
 }

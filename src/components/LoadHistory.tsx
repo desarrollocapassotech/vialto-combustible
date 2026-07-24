@@ -32,6 +32,12 @@ const BtnEdit = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: bool
   </button>
 );
 
+const PendingBadge = () => (
+  <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider px-2 py-1 rounded bg-amber-100 text-amber-800">
+    Pendiente de sincronización
+  </span>
+);
+
 const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
   <button
     type="button"
@@ -83,6 +89,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
               </div>
               <p className="text-xs text-muted-foreground">{fmtDate(load.date)}</p>
             </div>
+            {load.pending && <PendingBadge />}
             <div className="grid grid-cols-4 gap-2 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Litros</p>
@@ -101,10 +108,12 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
                 <p className="font-medium">${fmtNum(load.totalAmount)}</p>
               </div>
             </div>
-            <div className={showDelete ? "grid grid-cols-2 gap-2 pt-1" : "pt-1"}>
-              <BtnEdit onClick={() => onEdit(load)} fullWidth />
-              {showDelete && <BtnDelete onClick={() => onDelete(load.id)} fullWidth />}
-            </div>
+            {!load.pending && (
+              <div className={showDelete ? "grid grid-cols-2 gap-2 pt-1" : "pt-1"}>
+                <BtnEdit onClick={() => onEdit(load)} fullWidth />
+                {showDelete && <BtnDelete onClick={() => onDelete(load.id)} fullWidth />}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -124,7 +133,14 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
           <tbody className="divide-y divide-border">
             {paged.map((load) => (
               <tr key={load.id} className="hover:bg-muted/50">
-                <td className="px-4 py-2.5">{load.driverName}</td>
+                <td className="px-4 py-2.5">
+                  {load.driverName}
+                  {load.pending && (
+                    <div className="mt-1">
+                      <PendingBadge />
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-2.5">{load.licensePlate}</td>
                 <td className="px-4 py-2.5">{fmtNum(load.liters)} L</td>
                 <td className="px-4 py-2.5">{load.pricePerLiter != null ? `$${fmtNum(load.pricePerLiter)}` : "—"}</td>
@@ -132,10 +148,12 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
                 <td className="px-4 py-2.5">${fmtNum(load.totalAmount)}</td>
                 <td className="px-4 py-2.5">{fmtDate(load.date)}</td>
                 <td className="px-4 py-2.5">
-                  <div className="flex gap-2">
-                    <BtnEdit onClick={() => onEdit(load)} />
-                    {showDelete && <BtnDelete onClick={() => onDelete(load.id)} />}
-                  </div>
+                  {!load.pending && (
+                    <div className="flex gap-2">
+                      <BtnEdit onClick={() => onEdit(load)} />
+                      {showDelete && <BtnDelete onClick={() => onDelete(load.id)} />}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
