@@ -17,6 +17,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
+import { logout } from "@/lib/auth";
 
 interface AdminData {
   id: string;
@@ -104,10 +105,7 @@ const AdminManagement = () => {
       });
 
       toast.success(`Administrador ${name} ${lastName} creado. Iniciá sesión nuevamente.`);
-      await auth.signOut();
-      localStorage.removeItem("user");
-      sessionStorage.removeItem("superAdminEmpresaId");
-      sessionStorage.removeItem("superAdminEmpresaNombre");
+      await logout();
       navigate("/login-administrador", { replace: true });
     } catch (error: unknown) {
       const err = error as { code?: string };
