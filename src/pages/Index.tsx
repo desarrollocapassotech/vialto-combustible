@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import NewLoadForm from "@/components/NewLoadForm";
@@ -30,7 +30,13 @@ import Loader from "@/components/ui/loader";
 import { endOfMonth, formatISO, startOfMonth } from "date-fns";
 import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
-import { apiJson, ApiError } from "@/lib/api";
+import { apiJson, ApiError, isNetworkError } from "@/lib/api";
+import {
+  addPendingLoad,
+  getPendingLoads,
+  resolvePendingPhotoUrl,
+  PendingLoad,
+} from "@/lib/offlineQueue";
 
 // ─── tipos para la respuesta del backend ─────────────────────────────────────
 interface CargaApi {
@@ -79,6 +85,26 @@ function mapCargaToLoadData(c: CargaApi): LoadData {
   } as LoadData;
 }
 
+function mapPendingToLoadData(p: PendingLoad): LoadData {
+  return {
+    id: `pending-${p.localId}`,
+    driverName: p.driverName,
+    licensePlate: p.payload.patente,
+    driverDni: p.driverDni,
+    date: new Date(p.payload.fecha),
+    liters: p.payload.litros,
+    pricePerLiter: p.payload.precioPorLitro,
+    totalAmount: p.payload.importe,
+    kilometers: p.payload.km,
+    serviceStation: p.payload.estacion,
+    paymentMethod: p.payload.formaPago,
+    fotoTacometro: resolvePendingPhotoUrl(p.fotoTacometro),
+    fotoTicket: resolvePendingPhotoUrl(p.fotoTicket),
+    empresaId: "",
+    pending: true,
+  } as LoadData;
+}
+
 function currentMonthValue(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -112,6 +138,7 @@ const Index = () => {
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthValue);
   const [formKey, setFormKey] = useState(0); // <-- ESTADO AGREGADO
+  const [pendingLoads, setPendingLoads] = useState<PendingLoad[]>([]);
   const navigate = useNavigate();
   const logoUrl = useEmpresaLogo(empresaId);
 
@@ -195,6 +222,30 @@ const Index = () => {
       })
       .catch(() => {});
   }, [userRole]);
+
+  useEffect(() => {
+    if (userRole !== "CHOFER" || userDni == null) {
+      setPendingLoads([]);
+      return;
+    }
+    getPendingLoads(userDni)
+      .then((fetched) => {
+        // Se mergea (no se sobreescribe) porque esta lectura es async: si el
+        // chofer llega a crear una carga offline antes de que resuelva, no
+        // debe desaparecer de la UI cuando finalmente resuelve con un
+        // snapshot tomado antes de esa escritura.
+        setPendingLoads((prev) => {
+          const prevIds = new Set(prev.map((p) => p.localId));
+          const onlyNew = fetched.filter((p) => !prevIds.has(p.localId));
+          return [...prev, ...onlyNew].sort((a, b) =>
+            a.createdAt.localeCompare(b.createdAt),
+          );
+        });
+      })
+      .catch((error) => {
+        console.error("Error al leer las cargas pendientes:", error);
+      });
+  }, [userRole, userDni]);
 
   useEffect(() => {
     const fetchLoads = async () => {
@@ -307,8 +358,31 @@ const Index = () => {
     fetchMonthlyLoadCount();
   }, [userRole, empresaId]);
 
+  // Object URLs para previsualizar fotos de pendientes: se recalculan solo
+  // cuando cambia la lista de pendientes, y se revocan en el cleanup para no
+  // acumular URLs "blob:" huérfanas en cada render.
+  const pendingDisplayLoads = useMemo(
+    () => pendingLoads.map(mapPendingToLoadData),
+    [pendingLoads],
+  );
+
+  useEffect(() => {
+    return () => {
+      pendingDisplayLoads.forEach((load) => {
+        if (load.fotoTacometro?.startsWith("blob:"))
+          URL.revokeObjectURL(load.fotoTacometro);
+        if (load.fotoTicket?.startsWith("blob:"))
+          URL.revokeObjectURL(load.fotoTicket);
+      });
+    };
+  }, [pendingDisplayLoads]);
+
+  // Cargas pendientes de sincronización primero, luego las ya sincronizadas.
+  const displayedLoads =
+    userRole === "CHOFER" ? [...pendingDisplayLoads, ...loads] : loads;
+
   // Filtrar las cargas según el término de búsqueda
-  const filteredLoads = loads.filter((load) => {
+  const filteredLoads = displayedLoads.filter((load) => {
     const searchTerm = filter.toLowerCase();
     return (
       load.driverName.toLowerCase().includes(searchTerm) ||
@@ -354,17 +428,81 @@ const Index = () => {
           setKmError(null);
           toast.success("Carga actualizada exitosamente");
         } else {
-          // T5: crear carga vía API
-          const created = await apiJson<CargaApi>(
-            "/api/combustible/chofer/cargas",
-            getToken,
-            { method: "POST", body: JSON.stringify(apiPayload) },
-          );
-          setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+          // T5: crear carga vía API. Si no hay conexión (o la request falla
+          // por un error de red), se guarda localmente (COMB-07-T2) en vez
+          // de perder la carga.
+          const canAttemptCreate = navigator.onLine;
+          let savedOffline = false;
+
+          if (canAttemptCreate) {
+            try {
+              const created = await apiJson<CargaApi>(
+                "/api/combustible/chofer/cargas",
+                getToken,
+                { method: "POST", body: JSON.stringify(apiPayload) },
+              );
+              setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+              if (created.vehiculo?.patente)
+                setLastUsedPlate(created.vehiculo.patente);
+              toast.success("Carga registrada exitosamente");
+            } catch (error) {
+              if (!isNetworkError(error)) throw error;
+              savedOffline = true;
+            }
+          } else {
+            savedOffline = true;
+          }
+
+          if (savedOffline) {
+            if (userDni == null) {
+              console.error(
+                "No se pudo determinar el DNI del chofer para guardar la carga sin conexión.",
+              );
+              toast.error(
+                "No se pudo guardar la carga sin conexión: no se identificó al chofer. Intente nuevamente.",
+              );
+              return;
+            }
+
+            // fotoTacometro/fotoTicket ya viajan de forma estructurada en
+            // fotoTacometro/fotoTicket (blob u url); no duplicarlos dentro de
+            // "payload" evita que T3 tenga que reconciliar dos fuentes.
+            const { fotoTacometro: _ft, fotoTicket: _tk, ...pendingPayload } =
+              apiPayload;
+
+            try {
+              const pending = await addPendingLoad({
+                driverDni: userDni,
+                driverName: data.driverName,
+                payload: pendingPayload,
+                fotoTacometro: data.fotoTacometroBlob
+                  ? { kind: "blob", blob: data.fotoTacometroBlob }
+                  : { kind: "url", url: data.fotoTacometro },
+                fotoTicket: data.fotoTicketBlob
+                  ? { kind: "blob", blob: data.fotoTicketBlob }
+                  : { kind: "url", url: data.fotoTicket },
+              });
+              setPendingLoads((prev) => [...prev, pending]);
+              toast.success(
+                "Sin conexión: la carga se guardó en el dispositivo y se sincronizará más tarde.",
+              );
+            } catch (storageError) {
+              // No hay red y tampoco se pudo guardar localmente (cuota
+              // agotada, IndexedDB deshabilitado, etc.): la carga no quedó
+              // registrada en ningún lado. Se avisa explícitamente en vez de
+              // mostrar el mensaje genérico de "error al registrar", y se
+              // deja el formulario abierto para que el chofer pueda reintentar.
+              console.error(
+                "Error al guardar la carga sin conexión:",
+                storageError,
+              );
+              toast.error(
+                "No se pudo guardar la carga en el dispositivo (sin espacio disponible o almacenamiento no accesible). Intente nuevamente.",
+              );
+              return;
+            }
+          }
           setKmError(null);
-          if (created.vehiculo?.patente)
-            setLastUsedPlate(created.vehiculo.patente);
-          toast.success("Carga registrada exitosamente");
         }
         setIsFormOpen(false);
         setEditLoad(null);
