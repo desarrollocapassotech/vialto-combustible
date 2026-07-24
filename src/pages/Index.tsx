@@ -31,33 +31,14 @@ import { endOfMonth, formatISO, startOfMonth } from "date-fns";
 import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
+import { CargaApi, createCarga } from "@/lib/cargas";
 import {
   addPendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
   PendingLoad,
 } from "@/lib/offlineQueue";
-
-// ─── tipos para la respuesta del backend ─────────────────────────────────────
-interface CargaApi {
-  id: string;
-  tenantId: string;
-  vehiculoId: string;
-  vehiculo: { patente: string } | null;
-  choferId: string | null;
-  chofer: { nombre: string; dni: string | null } | null;
-  estacion: string;
-  litros: number;
-  precioPorLitro: number;
-  importe: number;
-  km: number;
-  formaPago: string | null;
-  fecha: string;
-  createdBy: string;
-  createdAt: string;
-  fotoTacometro?: string | null;
-  fotoTicket?: string | null;
-}
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
   return {
@@ -246,6 +227,19 @@ const Index = () => {
         console.error("Error al leer las cargas pendientes:", error);
       });
   }, [userRole, userDni]);
+
+  // Sincronización automática de la cola offline al recuperar conexión (COMB-07-T3).
+  useOfflineSync({
+    enabled: userRole === "CHOFER",
+    driverDni: userDni,
+    onLoadSynced: (pending, created) => {
+      setPendingLoads((prev) =>
+        prev.filter((p) => p.localId !== pending.localId),
+      );
+      setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+      if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+    },
+  });
 
   useEffect(() => {
     const fetchLoads = async () => {
@@ -436,11 +430,7 @@ const Index = () => {
 
           if (canAttemptCreate) {
             try {
-              const created = await apiJson<CargaApi>(
-                "/api/combustible/chofer/cargas",
-                getToken,
-                { method: "POST", body: JSON.stringify(apiPayload) },
-              );
+              const created = await createCarga(apiPayload, getToken);
               setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
               if (created.vehiculo?.patente)
                 setLastUsedPlate(created.vehiculo.patente);

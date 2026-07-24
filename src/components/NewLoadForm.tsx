@@ -5,6 +5,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { apiJson, isNetworkError } from "@/lib/api";
+import { uploadFoto } from "@/lib/cargas";
 import { Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -358,26 +359,6 @@ const NewLoadForm = ({
   const maxAllowedDiff = expectedTotal * 0.01;
   const hasDiscrepancy = hasLitersAndPrice && difference > maxAllowedDiff;
 
-  const uploadFoto = async (
-    file: File,
-    tipo: "tacometro" | "ticket",
-  ): Promise<string> => {
-    const token = localStorage.getItem("vialtoToken");
-    const formDataUpload = new FormData();
-    formDataUpload.append("file", file);
-    formDataUpload.append("tipo", tipo);
-
-    const res = await apiJson<{ url: string }>(
-      "/api/combustible/chofer/fotos",
-      async () => token,
-      {
-        method: "POST",
-        body: formDataUpload,
-      },
-    );
-    return res.url;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (hasDiscrepancy) return;
@@ -411,7 +392,9 @@ const NewLoadForm = ({
     ): Promise<{ url: string; blob: File | null }> => {
       if (!canAttemptUpload) return { url: "", blob: file };
       try {
-        return { url: await uploadFoto(file, tipo), blob: null };
+        const token = localStorage.getItem("vialtoToken");
+        const url = await uploadFoto(file, tipo, async () => token);
+        return { url, blob: null };
       } catch (error) {
         if (isNewLoad && isNetworkError(error)) return { url: "", blob: file };
         throw error;
