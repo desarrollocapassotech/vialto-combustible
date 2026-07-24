@@ -8,6 +8,8 @@
  * vigente sin que este módulo tenga que cambiar.
  */
 
+import { logout } from "@/lib/auth";
+
 function baseUrl(): string {
   // En dev, el proxy de Vite (puerto 5174) reenvía /api → backend (8080).
   // Usar URL relativa para que el proxy funcione; en producción VITE_API_URL apunta al backend.
@@ -85,8 +87,7 @@ export async function apiJson<T>(
   if (!res.ok) {
     // Si la sesión expiró o el token es inválido
     if (res.status === 401) {
-      localStorage.removeItem("vialtoToken");
-      localStorage.removeItem("user");
+      await logout();
 
       // Evitar loop de recargas si ya estamos en una página de login
       if (
