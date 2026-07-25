@@ -40,6 +40,13 @@ export interface PendingLoad {
   payload: PendingLoadPayload;
   fotoTacometro: PendingLoadPhoto;
   fotoTicket: PendingLoadPhoto;
+  /**
+   * Motivo del último intento de sincronización fallido (COMB-07-T4). Ausente
+   * si nunca se intentó o si el último intento no fue por un error propio de
+   * la carga (p. ej. se cortó por falta de conexión, ver offlineSync.ts).
+   */
+  lastError?: string;
+  lastErrorAt?: string;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -108,17 +115,10 @@ export async function deletePendingLoad(localId: string): Promise<void> {
   await withStore("readwrite", (store) => store.delete(localId));
 }
 
-/**
- * Actualiza solo la foto (tacómetro o ticket) de una carga pendiente,
- * normalmente para pasarla de kind:"blob" a kind:"url" una vez subida. Se usa
- * durante la sincronización (COMB-07-T3) cuando una foto llega a subirse
- * pero un paso posterior falla y el proceso se detiene: así la próxima
- * sincronización no la vuelve a subir.
- */
-export async function updatePendingLoadPhoto(
+/** Lee un registro, le aplica `mutate` y lo guarda. No hace nada si ya no existe (borrado mientras tanto). */
+async function mutatePendingLoad(
   localId: string,
-  field: "fotoTacometro" | "fotoTicket",
-  photo: PendingLoadPhoto,
+  mutate: (record: PendingLoad) => void,
 ): Promise<void> {
   const db = await openDb();
   try {
@@ -132,7 +132,7 @@ export async function updatePendingLoadPhoto(
           resolve();
           return;
         }
-        record[field] = photo;
+        mutate(record);
         const putRequest = store.put(record);
         putRequest.onsuccess = () => resolve();
         putRequest.onerror = () => reject(putRequest.error);
@@ -142,4 +142,40 @@ export async function updatePendingLoadPhoto(
   } finally {
     db.close();
   }
+}
+
+/**
+ * Actualiza solo la foto (tacómetro o ticket) de una carga pendiente,
+ * normalmente para pasarla de kind:"blob" a kind:"url" una vez subida. Se usa
+ * durante la sincronización (COMB-07-T3) cuando una foto llega a subirse
+ * pero un paso posterior falla y el proceso se detiene: así la próxima
+ * sincronización no la vuelve a subir.
+ */
+export async function updatePendingLoadPhoto(
+  localId: string,
+  field: "fotoTacometro" | "fotoTicket",
+  photo: PendingLoadPhoto,
+): Promise<void> {
+  await mutatePendingLoad(localId, (record) => {
+    record[field] = photo;
+  });
+}
+
+/** Marca una carga pendiente con el motivo por el que falló su último intento de sincronización (COMB-07-T4). */
+export async function markPendingLoadError(
+  localId: string,
+  message: string,
+): Promise<void> {
+  await mutatePendingLoad(localId, (record) => {
+    record.lastError = message;
+    record.lastErrorAt = new Date().toISOString();
+  });
+}
+
+/** Limpia el error de una carga pendiente (se llama antes de reintentar). */
+export async function clearPendingLoadError(localId: string): Promise<void> {
+  await mutatePendingLoad(localId, (record) => {
+    delete record.lastError;
+    delete record.lastErrorAt;
+  });
 }

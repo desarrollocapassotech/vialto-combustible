@@ -34,10 +34,12 @@ import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { CargaApi, createCarga } from "@/lib/cargas";
 import {
   addPendingLoad,
+  deletePendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
   PendingLoad,
 } from "@/lib/offlineQueue";
+import { retryPendingLoad } from "@/lib/offlineSync";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
@@ -83,6 +85,8 @@ function mapPendingToLoadData(p: PendingLoad): LoadData {
     fotoTicket: resolvePendingPhotoUrl(p.fotoTicket),
     empresaId: "",
     pending: true,
+    pendingLocalId: p.localId,
+    syncError: p.lastError,
   } as LoadData;
 }
 
@@ -228,18 +232,66 @@ const Index = () => {
       });
   }, [userRole, userDni]);
 
+  const handleLoadSynced = (pending: PendingLoad, created: CargaApi) => {
+    setPendingLoads((prev) =>
+      prev.filter((p) => p.localId !== pending.localId),
+    );
+    setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+    if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+  };
+
   // Sincronización automática de la cola offline al recuperar conexión (COMB-07-T3).
   useOfflineSync({
     enabled: userRole === "CHOFER",
     driverDni: userDni,
-    onLoadSynced: (pending, created) => {
-      setPendingLoads((prev) =>
-        prev.filter((p) => p.localId !== pending.localId),
-      );
-      setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
-      if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
-    },
+    onLoadSynced: handleLoadSynced,
   });
+
+  // Reintento manual de una carga pendiente con error (COMB-07-T4, botón "Reintentar").
+  const handleRetryPendingLoad = async (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
+    if (!pending) return;
+    const token = localStorage.getItem("vialtoToken");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    try {
+      const created = await retryPendingLoad(pending, async () => token);
+      handleLoadSynced(pending, created);
+      toast.success("Carga sincronizada exitosamente");
+    } catch (error) {
+      const isNetErr = isNetworkError(error);
+      const message = isNetErr
+        ? "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo."
+        : error instanceof ApiError && error.message
+          ? error.message
+          : "No se pudo sincronizar la carga.";
+      // Refleja acá lo que retryPendingLoad ya persistió en IndexedDB: marca
+      // el error, o lo deja sin marcar si fue un problema de red transitorio
+      // (para que la sincronización automática la retome sola al reconectar).
+      setPendingLoads((prev) =>
+        prev.map((p) =>
+          p.localId === localId
+            ? { ...p, lastError: isNetErr ? undefined : message }
+            : p,
+        ),
+      );
+      toast.error(message);
+    }
+  };
+
+  // Eliminar una carga pendiente con error, a pedido del chofer (COMB-07-T4).
+  const handleDeletePendingLoad = async (localId: string) => {
+    try {
+      await deletePendingLoad(localId);
+      setPendingLoads((prev) => prev.filter((p) => p.localId !== localId));
+      toast.success("Carga eliminada");
+    } catch (error) {
+      console.error("Error al eliminar la carga pendiente:", error);
+      toast.error("No se pudo eliminar la carga");
+    }
+  };
 
   useEffect(() => {
     const fetchLoads = async () => {
@@ -795,6 +847,8 @@ const Index = () => {
                 }}
                 onDelete={handleDeleteLoad}
                 showDelete={userRole !== "CHOFER"}
+                onRetryPending={handleRetryPendingLoad}
+                onDeletePending={handleDeletePendingLoad}
               />
             </div>
           )}

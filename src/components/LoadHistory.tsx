@@ -7,6 +7,10 @@ interface LoadHistoryProps {
   onEdit: (load: LoadData) => void;
   onDelete: (id: string) => void;
   showDelete?: boolean;
+  /** Reintentar sincronizar una carga pendiente que quedó con error (COMB-07-T4). */
+  onRetryPending?: (localId: string) => void;
+  /** Eliminar una carga pendiente que quedó con error (COMB-07-T4). */
+  onDeletePending?: (localId: string) => void;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -38,6 +42,12 @@ const PendingBadge = () => (
   </span>
 );
 
+const ErrorBadge = () => (
+  <span className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider px-2 py-1 rounded bg-red-100 text-red-800">
+    Error de sincronización
+  </span>
+);
+
 const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
   <button
     type="button"
@@ -50,7 +60,46 @@ const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: bo
   </button>
 );
 
-const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: LoadHistoryProps) => {
+const BtnRetry = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-border bg-card hover:bg-muted transition-colors${fullWidth ? " w-full" : ""}`}
+  >
+    Reintentar
+  </button>
+);
+
+/** Motivo del error + acciones de una carga pendiente que falló al sincronizar (COMB-07-T4). */
+const SyncErrorActions = ({
+  message,
+  onRetry,
+  onDelete,
+  fullWidth,
+}: {
+  message: string;
+  onRetry: () => void;
+  onDelete: () => void;
+  fullWidth?: boolean;
+}) => (
+  <div className="space-y-2">
+    <p className="text-xs text-red-700">{message}</p>
+    <div className={fullWidth ? "grid grid-cols-2 gap-2" : "flex gap-2"}>
+      <BtnRetry onClick={onRetry} fullWidth={fullWidth} />
+      <BtnDelete onClick={onDelete} fullWidth={fullWidth} />
+    </div>
+  </div>
+);
+
+const LoadHistory = ({
+  loads,
+  filter,
+  onEdit,
+  onDelete,
+  showDelete = true,
+  onRetryPending,
+  onDeletePending,
+}: LoadHistoryProps) => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const filtered = loads.filter(
@@ -89,7 +138,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
               </div>
               <p className="text-xs text-muted-foreground">{fmtDate(load.date)}</p>
             </div>
-            {load.pending && <PendingBadge />}
+            {load.pending && (load.syncError ? <ErrorBadge /> : <PendingBadge />)}
             <div className="grid grid-cols-4 gap-2 text-sm">
               <div>
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Litros</p>
@@ -112,6 +161,16 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
               <div className={showDelete ? "grid grid-cols-2 gap-2 pt-1" : "pt-1"}>
                 <BtnEdit onClick={() => onEdit(load)} fullWidth />
                 {showDelete && <BtnDelete onClick={() => onDelete(load.id)} fullWidth />}
+              </div>
+            )}
+            {load.pending && load.syncError && (
+              <div className="pt-1">
+                <SyncErrorActions
+                  message={load.syncError}
+                  onRetry={() => onRetryPending?.(load.pendingLocalId!)}
+                  onDelete={() => onDeletePending?.(load.pendingLocalId!)}
+                  fullWidth
+                />
               </div>
             )}
           </div>
@@ -137,7 +196,7 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
                   {load.driverName}
                   {load.pending && (
                     <div className="mt-1">
-                      <PendingBadge />
+                      {load.syncError ? <ErrorBadge /> : <PendingBadge />}
                     </div>
                   )}
                 </td>
@@ -152,6 +211,15 @@ const LoadHistory = ({ loads, filter, onEdit, onDelete, showDelete = true }: Loa
                     <div className="flex gap-2">
                       <BtnEdit onClick={() => onEdit(load)} />
                       {showDelete && <BtnDelete onClick={() => onDelete(load.id)} />}
+                    </div>
+                  )}
+                  {load.pending && load.syncError && (
+                    <div className="max-w-xs">
+                      <SyncErrorActions
+                        message={load.syncError}
+                        onRetry={() => onRetryPending?.(load.pendingLocalId!)}
+                        onDelete={() => onDeletePending?.(load.pendingLocalId!)}
+                      />
                     </div>
                   )}
                 </td>

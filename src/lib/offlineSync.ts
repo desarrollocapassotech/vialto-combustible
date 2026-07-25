@@ -4,20 +4,57 @@
  * offlineQueue.ts. Reutiliza el mismo flujo de creación que el alta online
  * (uploadFoto/createCarga en cargas.ts) para no duplicar lógica.
  *
- * Alcance deliberadamente angosto: si un paso falla, se detiene y el resto
- * queda pendiente tal cual estaba. Reintentos, backoff y resolución de
- * conflictos son responsabilidad de COMB-07-T4.
+ * Manejo de errores (COMB-07-T4): un error propio de una carga (rechazada
+ * por el backend, ej. validación de km) no bloquea al resto de la cola — se
+ * marca esa carga puntual, se reporta al backend para que quede registrada
+ * para revisión del administrador, y se sigue con las siguientes. Un error
+ * de red sí corta todo el intento (no tiene sentido seguir pidiendo al
+ * backend sin conexión, ni marcar como "error" cargas que nunca se llegaron
+ * a intentar).
  */
 
-import { TokenGetter } from "./api";
-import { CargaApi, CargaPayload, createCarga, uploadFoto } from "./cargas";
+import { ApiError, isNetworkError, TokenGetter } from "./api";
+import { CargaApi, CargaPayload, createCarga, reportSyncError, uploadFoto } from "./cargas";
 import {
   PendingLoad,
   PendingLoadPhoto,
+  clearPendingLoadError,
   deletePendingLoad,
   getPendingLoads,
+  markPendingLoadError,
   updatePendingLoadPhoto,
 } from "./offlineQueue";
+
+function syncErrorMessage(error: unknown): string {
+  return error instanceof ApiError && error.message
+    ? error.message
+    : "No se pudo sincronizar la carga.";
+}
+
+/**
+ * Marca localmente el error y lo reporta al backend (best-effort: si el
+ * reporte falla —ej. sin conexión justo en ese momento— no debe impedir que
+ * la carga quede igual marcada localmente ni cortar la sincronización).
+ */
+async function recordSyncError(
+  pending: PendingLoad,
+  message: string,
+  getToken: TokenGetter,
+): Promise<void> {
+  await markPendingLoadError(pending.localId, message);
+  try {
+    await reportSyncError(
+      message,
+      { ...pending.payload, localId: pending.localId },
+      getToken,
+    );
+  } catch (error) {
+    console.error(
+      `No se pudo reportar al backend el error de sincronización de la carga ${pending.localId}:`,
+      error,
+    );
+  }
+}
 
 async function resolvePhotoUrl(
   localId: string,
@@ -78,16 +115,27 @@ async function syncOneLoad(
 }
 
 /**
- * Sincroniza, en orden FIFO, todas las cargas pendientes del chofer. Se
- * detiene ante el primer error (queda para COMB-07-T4 decidir qué hacer con
- * las restantes) y devuelve cuántas se sincronizaron con éxito.
+ * Sincroniza, en orden FIFO, las cargas pendientes del chofer, y devuelve
+ * cuántas se sincronizaron con éxito.
+ *
+ * Por defecto (`skipErrored: true`, el usado por la sincronización
+ * automática) no reintenta las cargas que ya quedaron marcadas con un error
+ * propio en un intento anterior: si se reintentaran solas en cada
+ * reconexión, una red inestable terminaría repitiendo contra el backend un
+ * pedido que ya sabemos que va a fallar. Esas cargas solo se reintentan a
+ * demanda (ver retryPendingLoad, disparado por el botón "Reintentar").
  */
 export async function syncPendingLoads(
   driverDni: number,
   getToken: TokenGetter,
   onLoadSynced: (pending: PendingLoad, created: CargaApi) => void,
+  options: { skipErrored?: boolean } = {},
 ): Promise<number> {
-  const pendingLoads = await getPendingLoads(driverDni);
+  const { skipErrored = true } = options;
+  const allPending = await getPendingLoads(driverDni);
+  const pendingLoads = skipErrored
+    ? allPending.filter((p) => !p.lastError)
+    : allPending;
   let syncedCount = 0;
 
   for (const pending of pendingLoads) {
@@ -96,13 +144,40 @@ export async function syncPendingLoads(
       syncedCount++;
       onLoadSynced(pending, created);
     } catch (error) {
+      if (isNetworkError(error)) {
+        console.error(
+          "Sincronización de cargas pendientes detenida por un error de red:",
+          error,
+        );
+        break;
+      }
+      // Error propio de esta carga (rechazada por el backend): se marca y se
+      // sigue con el resto de la cola en vez de bloquearla por completo.
       console.error(
-        "Sincronización de cargas pendientes detenida por un error:",
+        `La carga ${pending.localId} no se pudo sincronizar:`,
         error,
       );
-      break;
+      await recordSyncError(pending, syncErrorMessage(error), getToken);
     }
   }
 
   return syncedCount;
+}
+
+/** Reintento manual de una única carga pendiente (botón "Reintentar", COMB-07-T4). */
+export async function retryPendingLoad(
+  pending: PendingLoad,
+  getToken: TokenGetter,
+): Promise<CargaApi> {
+  await clearPendingLoadError(pending.localId);
+  try {
+    return await syncOneLoad(pending, getToken);
+  } catch (error) {
+    // Un error de red no es un problema de la carga en sí: se deja sin marcar
+    // para que la sincronización automática la retome sola al reconectar.
+    if (!isNetworkError(error)) {
+      await recordSyncError(pending, syncErrorMessage(error), getToken);
+    }
+    throw error;
+  }
 }

@@ -67,3 +67,22 @@ export async function createCarga(
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Reporta al backend que una carga guardada offline no se pudo sincronizar
+ * (COMB-07-T4), para que quede registrado y sea revisable por el
+ * administrador del tenant. Quien llama decide si conviene tratarlo como
+ * best-effort (ver offlineSync.ts): que este reporte falle no debe impedir
+ * que la carga quede marcada localmente con su error.
+ */
+export async function reportSyncError(
+  mensaje: string,
+  payload: Record<string, unknown>,
+  getToken: TokenGetter,
+): Promise<void> {
+  await apiJson<unknown>(
+    "/api/combustible/chofer/errores-sincronizacion",
+    getToken,
+    { method: "POST", body: JSON.stringify({ mensaje, payload }) },
+  );
+}
