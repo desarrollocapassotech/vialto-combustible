@@ -829,6 +829,7 @@ const Index = () => {
           }
           kmError={kmError}
           onClearKmError={() => setKmError(null)}
+          autoCalculatePrice={userRole === "CHOFER"}
         />
       </Dialog>
     </div>
