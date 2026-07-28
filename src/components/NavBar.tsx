@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, Menu, X } from "lucide-react";
-import { auth } from "@/firebase";
+import { logout } from "@/lib/auth";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import VialtoLogo from "@/components/VialtoLogo";
@@ -39,17 +39,9 @@ const NavBar: React.FC<{
   });
 
   const handleLogout = async () => {
-    try {
-      await auth.signOut();
-      localStorage.removeItem("user");
-      sessionStorage.removeItem("superAdminEmpresaId");
-      sessionStorage.removeItem("superAdminEmpresaNombre");
-      toast.success("Sesión cerrada exitosamente");
-      navigate("/login");
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error);
-      toast.error("Error al cerrar sesión");
-    }
+    await logout();
+    toast.success("Sesión cerrada exitosamente");
+    navigate("/login");
   };
 
   // Manejar clics fuera del menú

@@ -31,6 +31,7 @@ import { endOfMonth, formatISO, startOfMonth } from "date-fns";
 import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
+import { logout } from "@/lib/auth";
 import { CargaApi, createCarga } from "@/lib/cargas";
 import {
   addPendingLoad,
@@ -178,9 +179,13 @@ const Index = () => {
             }
           } else {
             toast.error("Usuario no registrado.");
+            // Limpia también vialtoToken: si quedara vivo, App.tsx seguiría
+            // creyendo que hay sesión y rebotaría de nuevo a /inicio.
+            await logout();
             navigate("/login");
           }
         } else {
+          await logout();
           navigate("/login");
         }
       } catch (error) {
@@ -324,8 +329,7 @@ const Index = () => {
         }
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          localStorage.removeItem("user");
-          localStorage.removeItem("vialtoToken");
+          await logout();
           navigate("/login");
           return;
         }
@@ -580,8 +584,7 @@ const Index = () => {
       setFormKey((prev) => prev + 1); // <-- ACTUALIZACIÓN DE LA KEY ACÁ
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("vialtoToken");
+        await logout();
         navigate("/login");
         return;
       }
@@ -622,8 +625,7 @@ const Index = () => {
       toast.success("Carga eliminada exitosamente");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("vialtoToken");
+        await logout();
         navigate("/login");
         return;
       }
@@ -883,6 +885,7 @@ const Index = () => {
           }
           kmError={kmError}
           onClearKmError={() => setKmError(null)}
+          autoCalculatePrice={userRole === "CHOFER"}
         />
       </Dialog>
     </div>
