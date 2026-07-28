@@ -16,16 +16,21 @@ interface UseOfflineSyncParams {
   enabled: boolean;
   driverDni: number | null;
   onLoadSynced: (pending: PendingLoad, created: CargaApi) => void;
+  /** Se dispara por cada carga que falla durante la sincronización automática (COMB-07-T4), para que la UI se actualice sin esperar a un reload. */
+  onLoadError: (pending: PendingLoad, message: string) => void;
 }
 
 export function useOfflineSync({
   enabled,
   driverDni,
   onLoadSynced,
+  onLoadError,
 }: UseOfflineSyncParams): void {
   const isSyncingRef = useRef(false);
   const onLoadSyncedRef = useRef(onLoadSynced);
   onLoadSyncedRef.current = onLoadSynced;
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
 
   useEffect(() => {
     if (!enabled || driverDni == null) return;
@@ -44,6 +49,10 @@ export function useOfflineSync({
           driverDni,
           async () => token,
           (pending, created) => onLoadSyncedRef.current(pending, created),
+          {
+            onLoadError: (pending, message) =>
+              onLoadErrorRef.current(pending, message),
+          },
         );
         if (syncedCount > 0) {
           toast.success(
