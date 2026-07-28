@@ -16,10 +16,18 @@ const SUPER_ADMIN_EMPRESA_KEY = "superAdminEmpresaId";
 const SUPER_ADMIN_EMPRESA_NOMBRE_KEY = "superAdminEmpresaNombre";
 
 export async function logout(): Promise<void> {
-  try {
-    await auth.signOut();
-  } catch (error) {
-    console.error("Error al cerrar sesión en Firebase:", error);
+  // Los choferes nunca autentican contra Firebase (login propio por DNI+PIN
+  // vía JWT, ver Login.tsx): auth.currentUser queda null toda la sesión. Sin
+  // este chequeo, el logout esperaba igual a auth.signOut() —una llamada de
+  // red— para esas sesiones, y quedaba colgado sin volver al login si no
+  // había conexión (bug de COMB-07-T4). Para ADMIN/SUPER_ADMIN, que sí
+  // autentican vía Firebase, el comportamiento no cambia.
+  if (auth.currentUser) {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error("Error al cerrar sesión en Firebase:", error);
+    }
   }
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);

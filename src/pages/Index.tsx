@@ -35,10 +35,12 @@ import { logout } from "@/lib/auth";
 import { CargaApi, createCarga } from "@/lib/cargas";
 import {
   addPendingLoad,
+  deletePendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
   PendingLoad,
 } from "@/lib/offlineQueue";
+import { retryPendingLoad } from "@/lib/offlineSync";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
@@ -84,6 +86,8 @@ function mapPendingToLoadData(p: PendingLoad): LoadData {
     fotoTicket: resolvePendingPhotoUrl(p.fotoTicket),
     empresaId: "",
     pending: true,
+    pendingLocalId: p.localId,
+    syncError: p.lastError,
   } as LoadData;
 }
 
@@ -206,7 +210,7 @@ const Index = () => {
       .then((data) => {
         if (data?.patente) setLastUsedPlate(data.patente);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [userRole]);
 
   useEffect(() => {
@@ -233,18 +237,72 @@ const Index = () => {
       });
   }, [userRole, userDni]);
 
+  const handleLoadSynced = (pending: PendingLoad, created: CargaApi) => {
+    setPendingLoads((prev) =>
+      prev.filter((p) => p.localId !== pending.localId),
+    );
+    setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+    if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+  };
+
+  // Refleja en el estado de React el error que ya se persistió en IndexedDB
+  // (COMB-07-T4), tanto si lo marcó la sincronización automática como un
+  // reintento manual — sin esto, la UI queda mostrando "Pendiente" hasta el
+  // próximo reload en vez de pasar a "Error de sincronización" al instante.
+  const applyPendingLoadError = (localId: string, message?: string) => {
+    setPendingLoads((prev) =>
+      prev.map((p) => (p.localId === localId ? { ...p, lastError: message } : p)),
+    );
+  };
+
   // Sincronización automática de la cola offline al recuperar conexión (COMB-07-T3).
   useOfflineSync({
     enabled: userRole === "CHOFER",
     driverDni: userDni,
-    onLoadSynced: (pending, created) => {
-      setPendingLoads((prev) =>
-        prev.filter((p) => p.localId !== pending.localId),
-      );
-      setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
-      if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
-    },
+    onLoadSynced: handleLoadSynced,
+    onLoadError: (pending, message) =>
+      applyPendingLoadError(pending.localId, message),
   });
+
+  // Reintento manual de una carga pendiente con error (COMB-07-T4, botón "Reintentar").
+  const handleRetryPendingLoad = async (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
+    if (!pending) return;
+    const token = localStorage.getItem("vialtoToken");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    try {
+      const created = await retryPendingLoad(pending, async () => token);
+      handleLoadSynced(pending, created);
+      toast.success("Carga sincronizada exitosamente");
+    } catch (error) {
+      const isNetErr = isNetworkError(error);
+      const message = isNetErr
+        ? "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo."
+        : error instanceof ApiError && error.message
+          ? error.message
+          : "No se pudo sincronizar la carga.";
+      // Refleja acá lo que retryPendingLoad ya persistió en IndexedDB: marca
+      // el error, o lo deja sin marcar si fue un problema de red transitorio
+      // (para que la sincronización automática la retome sola al reconectar).
+      applyPendingLoadError(localId, isNetErr ? undefined : message);
+      toast.error(message);
+    }
+  };
+
+  // Eliminar una carga pendiente con error, a pedido del chofer (COMB-07-T4).
+  const handleDeletePendingLoad = async (localId: string) => {
+    try {
+      await deletePendingLoad(localId);
+      setPendingLoads((prev) => prev.filter((p) => p.localId !== localId));
+      toast.success("Carga eliminada");
+    } catch (error) {
+      console.error("Error al eliminar la carga pendiente:", error);
+      toast.error("No se pudo eliminar la carga");
+    }
+  };
 
   useEffect(() => {
     const fetchLoads = async () => {
@@ -461,8 +519,11 @@ const Index = () => {
             // fotoTacometro/fotoTicket ya viajan de forma estructurada en
             // fotoTacometro/fotoTicket (blob u url); no duplicarlos dentro de
             // "payload" evita que T3 tenga que reconciliar dos fuentes.
-            const { fotoTacometro: _ft, fotoTicket: _tk, ...pendingPayload } =
-              apiPayload;
+            const {
+              fotoTacometro: _ft,
+              fotoTicket: _tk,
+              ...pendingPayload
+            } = apiPayload;
 
             try {
               const pending = await addPendingLoad({
@@ -692,41 +753,41 @@ const Index = () => {
           {/* Tarjetas Admin (o Super Admin dentro de empresa) */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {driverCount !== null && (
-                <div
-                  onClick={() => navigate("/admin/choferes")}
-                  className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
-                >
-                  <Truck className="h-8 w-8 text-[#E8470A]" />
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">
-                      Choferes Registrados
-                    </span>
-                    <span className="text-2xl font-bold text-[#E8470A]">
-                      {driverCount}
-                    </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {driverCount !== null && (
+                  <div
+                    onClick={() => navigate("/admin/choferes")}
+                    className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
+                  >
+                    <Truck className="h-8 w-8 text-[#E8470A]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">
+                        Choferes Registrados
+                      </span>
+                      <span className="text-2xl font-bold text-[#E8470A]">
+                        {driverCount}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-              {monthlyLoadCount !== null && (
-                <a
-                  href="#historial"
-                  className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
-                >
-                  <Calendar className="h-8 w-8 text-[#E8470A]" />
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">
-                      Cargas este mes
-                    </span>
-                    <span className="text-2xl font-bold text-[#E8470A]">
-                      {monthlyLoadCount}
-                    </span>
-                  </div>
-                </a>
-              )}
-            </div>
-          )}
+                )}
+                {monthlyLoadCount !== null && (
+                  <a
+                    href="#historial"
+                    className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
+                  >
+                    <Calendar className="h-8 w-8 text-[#E8470A]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">
+                        Cargas este mes
+                      </span>
+                      <span className="text-2xl font-bold text-[#E8470A]">
+                        {monthlyLoadCount}
+                      </span>
+                    </div>
+                  </a>
+                )}
+              </div>
+            )}
 
           {/* Botón nueva carga + selector de mes (solo CHOFER) */}
           {userRole === "CHOFER" && (
@@ -763,24 +824,24 @@ const Index = () => {
           {/* Exportación de datos */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <ExportData loads={filteredLoads} />
-            </div>
-          )}
+              <div className="bg-white rounded-lg shadow-md p-4">
+                <ExportData loads={filteredLoads} />
+              </div>
+            )}
 
           {/* Filtro */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <Input
-                type="text"
-                placeholder="Buscar por chofer o patente..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          )}
+              <div className="bg-white rounded-lg shadow-md p-4">
+                <Input
+                  type="text"
+                  placeholder="Buscar por chofer o patente..."
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            )}
 
           {/* Historial de cargas (no para super admin sin empresa) */}
           {(userRole !== "SUPER_ADMIN" || empresaId) && (
@@ -797,6 +858,8 @@ const Index = () => {
                 }}
                 onDelete={handleDeleteLoad}
                 showDelete={userRole !== "CHOFER"}
+                onRetryPending={handleRetryPendingLoad}
+                onDeletePending={handleDeletePendingLoad}
               />
             </div>
           )}
