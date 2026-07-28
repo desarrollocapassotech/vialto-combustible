@@ -5,6 +5,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { apiJson, isNetworkError } from "@/lib/api";
+import { uploadFoto } from "@/lib/cargas";
 import { Camera, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -123,6 +124,12 @@ interface NewLoadFormProps {
   licensePlate?: string;
   kmError?: string | null;
   onClearKmError?: () => void;
+  /**
+   * true: el precio por litro se calcula solo (monto ÷ litros) y no se puede
+   * editar a mano — flujo del chofer (COMB-03-T5). false/undefined: precio
+   * editable manualmente, comportamiento sin cambios — panel de administración.
+   */
+  autoCalculatePrice?: boolean;
 }
 
 interface PhotoUploaderProps {
@@ -216,6 +223,7 @@ const NewLoadForm = ({
   licensePlate,
   kmError,
   onClearKmError,
+  autoCalculatePrice = false,
 }: NewLoadFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prevKmInfo, setPrevKmInfo] = useState<{
@@ -348,6 +356,22 @@ const NewLoadForm = ({
     };
   }, [formData.licensePlate]);
 
+  // Precio por litro calculado automáticamente (COMB-03-T5, solo flujo
+  // chofer): se deriva de monto ÷ litros en vez de dejarlo tipear a mano,
+  // para que no puedan desincronizarse entre sí. En el panel de
+  // administración (autoCalculatePrice=false) este efecto no hace nada y el
+  // campo se sigue completando manualmente como hasta ahora.
+  useEffect(() => {
+    if (!autoCalculatePrice) return;
+    const liters = parseAmount(formData.liters);
+    const total = parseAmount(formData.totalAmount);
+    const computed = liters > 0 ? total / liters : 0;
+    setFormData((prev) => ({
+      ...prev,
+      pricePerLiter: computed > 0 ? formatAmountFromNumber(computed) : "",
+    }));
+  }, [autoCalculatePrice, formData.liters, formData.totalAmount]);
+
   // Cálculos en tiempo real de coherencia de importe
   const litersNum = parseAmount(formData.liters);
   const priceNum = parseAmount(formData.pricePerLiter);
@@ -356,27 +380,12 @@ const NewLoadForm = ({
   const expectedTotal = litersNum * priceNum;
   const difference = Math.abs(totalNum - expectedTotal);
   const maxAllowedDiff = expectedTotal * 0.01;
-  const hasDiscrepancy = hasLitersAndPrice && difference > maxAllowedDiff;
-
-  const uploadFoto = async (
-    file: File,
-    tipo: "tacometro" | "ticket",
-  ): Promise<string> => {
-    const token = localStorage.getItem("vialtoToken");
-    const formDataUpload = new FormData();
-    formDataUpload.append("file", file);
-    formDataUpload.append("tipo", tipo);
-
-    const res = await apiJson<{ url: string }>(
-      "/api/combustible/chofer/fotos",
-      async () => token,
-      {
-        method: "POST",
-        body: formDataUpload,
-      },
-    );
-    return res.url;
-  };
+  // Con precio calculado automáticamente, litros × precio == monto por
+  // construcción (salvo redondeo de centavos, muy por debajo del 1%): el
+  // chequeo de discrepancia solo tiene sentido cuando el precio se tipea a
+  // mano (panel de administración).
+  const hasDiscrepancy =
+    !autoCalculatePrice && hasLitersAndPrice && difference > maxAllowedDiff;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -411,7 +420,9 @@ const NewLoadForm = ({
     ): Promise<{ url: string; blob: File | null }> => {
       if (!canAttemptUpload) return { url: "", blob: file };
       try {
-        return { url: await uploadFoto(file, tipo), blob: null };
+        const token = localStorage.getItem("vialtoToken");
+        const url = await uploadFoto(file, tipo, async () => token);
+        return { url, blob: null };
       } catch (error) {
         if (isNewLoad && isNetworkError(error)) return { url: "", blob: file };
         throw error;
@@ -502,7 +513,10 @@ const NewLoadForm = ({
               className="min-h-[64px] w-full text-2xl sm:text-3xl font-semibold py-4 px-5 touch-manipulation bg-white border-2 border-gray-200 rounded-lg shadow-sm text-center placeholder:text-gray-400 focus:border-[#E8470A] focus:ring-2 focus:ring-[#E8470A]/20"
               placeholder="$0,00"
             />
-            {hasLitersAndPrice && (
+            {/* Con precio automático, monto y "total esperado" son siempre el
+                mismo número por construcción: mostrarlo no aporta nada, solo
+                aplica al panel de administración (precio editable a mano). */}
+            {!autoCalculatePrice && hasLitersAndPrice && (
               <div className="mt-3 pt-3 border-t border-gray-200 text-center space-y-1">
                 <div className="text-sm text-gray-600">
                   Total esperado:{" "}
@@ -584,28 +598,43 @@ const NewLoadForm = ({
               className={inputBaseClass}
               placeholder="Ej: 1.234,56"
             />
+            {/* Precio por litro (COMB-03-T5): en el flujo del chofer no es un
+                campo del formulario, es un dato informativo derivado de monto
+                ÷ litros — por eso va como texto, no como input. */}
+            {autoCalculatePrice && formData.pricePerLiter && (
+              <p className="mt-1.5 text-xs text-gray-500">
+                Precio por litro calculado:{" "}
+                <span className="font-medium text-gray-700">
+                  ${formData.pricePerLiter}
+                </span>
+              </p>
+            )}
           </div>
 
-          {/* Precio por Litro */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Precio por Litro
-            </label>
-            <Input
-              required
-              type="text"
-              inputMode="decimal"
-              value={formData.pricePerLiter}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  pricePerLiter: formatAmount(e.target.value),
-                })
-              }
-              className={inputBaseClass}
-              placeholder="Ej: 1.234,56"
-            />
-          </div>
+          {/* Precio por Litro: solo en el panel de administración. En el
+              flujo del chofer se calcula solo y se muestra como texto debajo
+              de Litros Cargados (arriba), no como campo editable. */}
+          {!autoCalculatePrice && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Precio por Litro
+              </label>
+              <Input
+                required
+                type="text"
+                inputMode="decimal"
+                value={formData.pricePerLiter}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    pricePerLiter: formatAmount(e.target.value),
+                  })
+                }
+                className={inputBaseClass}
+                placeholder="Ej: 1.234,56"
+              />
+            </div>
+          )}
 
           {/* Estación de Servicio - abre sheet al tocar */}
           <div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { auth } from "@/firebase";
+import { logout } from "@/lib/auth";
 import Loader from "./ui/loader";
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -41,15 +42,30 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
     checkAuthStatus();
   }, [navigate]);
 
+  // La navegación debe dispararse en un efecto, no durante el render: llamar
+  // navigate() en el cuerpo del componente actualiza `BrowserRouter` mientras
+  // `ProtectedRoute` todavía se está renderizando (warning de React).
+  //
+  // Antes de redirigir, se llama a logout(): App.tsx decide si mostrar /login
+  // mirando solo `vialtoToken`. Si ProtectedRoute concluye "no autenticado" sin
+  // limpiar esa clave (por ejemplo, por un estado de sesión inconsistente
+  // heredado), App.tsx seguiría creyendo que hay sesión y mandaría de vuelta a
+  // /inicio, generando un loop de redirecciones entre ambas rutas.
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      logout().then(() => navigate("/login", { replace: true }));
+    }
+  }, [isLoading, isAuthenticated, navigate]);
+
   // Mientras se carga, mostrar un loader
   if (isLoading) {
     return <Loader />
   }
 
-  // Si no está autenticado después de la carga inicial, redirigir al login
+  // Si no está autenticado después de la carga inicial, no renderizar nada
+  // mientras se redirige (la redirección la dispara el efecto de arriba)
   if (!isAuthenticated) {
-    navigate("/login", { replace: true });
-    return null; // No renderizar nada mientras se redirige
+    return null;
   }
 
   // Si está autenticado, renderizar los hijos

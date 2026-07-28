@@ -1,14 +1,15 @@
 /**
- * Cola local de cargas de combustible pendientes de sincronizar (COMB-07-T2).
+ * Cola local de cargas de combustible pendientes de sincronizar (COMB-07-T2,
+ * borrado/actualización agregados en COMB-07-T3).
  *
  * Wrapper mínimo sobre IndexedDB (sin dependencias externas) porque el caso de
- * uso es angosto: un solo object store, altas y lecturas. IndexedDB se elige
- * sobre localStorage porque las fotos son binarias (Blob) y localStorage no
- * las soporta ni tiene cuota suficiente para varias cargas con fotos.
- *
- * Alcance: solo guardar y consultar. La sincronización, el reintento y el
- * borrado post-sincronización son responsabilidad de COMB-07-T3.
+ * uso es angosto: un solo object store, altas, lecturas, borrado y update de
+ * una foto puntual. IndexedDB se elige sobre localStorage porque las fotos
+ * son binarias (Blob) y localStorage no las soporta ni tiene cuota suficiente
+ * para varias cargas con fotos.
  */
+
+import { CargaPayload } from "./cargas";
 
 const DB_NAME = "vialto-offline";
 const DB_VERSION = 1;
@@ -25,16 +26,10 @@ export function resolvePendingPhotoUrl(photo: PendingLoadPhoto): string {
   return photo.kind === "url" ? photo.url : URL.createObjectURL(photo.blob);
 }
 
-export interface PendingLoadPayload {
-  patente: string;
-  estacion: string;
-  litros: number;
-  precioPorLitro: number;
-  importe: number;
-  km: number;
-  formaPago?: string;
-  fecha: string;
-}
+export type PendingLoadPayload = Omit<
+  CargaPayload,
+  "fotoTacometro" | "fotoTicket"
+>;
 
 export interface PendingLoad {
   localId: string;
@@ -106,4 +101,45 @@ export async function getPendingLoads(
   return results
     .filter((load) => load.driverDni === driverDni)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Borra una carga pendiente ya sincronizada exitosamente con el backend. */
+export async function deletePendingLoad(localId: string): Promise<void> {
+  await withStore("readwrite", (store) => store.delete(localId));
+}
+
+/**
+ * Actualiza solo la foto (tacómetro o ticket) de una carga pendiente,
+ * normalmente para pasarla de kind:"blob" a kind:"url" una vez subida. Se usa
+ * durante la sincronización (COMB-07-T3) cuando una foto llega a subirse
+ * pero un paso posterior falla y el proceso se detiene: así la próxima
+ * sincronización no la vuelve a subir.
+ */
+export async function updatePendingLoadPhoto(
+  localId: string,
+  field: "fotoTacometro" | "fotoTicket",
+  photo: PendingLoadPhoto,
+): Promise<void> {
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const getRequest = store.get(localId);
+      getRequest.onsuccess = () => {
+        const record = getRequest.result as PendingLoad | undefined;
+        if (!record) {
+          resolve();
+          return;
+        }
+        record[field] = photo;
+        const putRequest = store.put(record);
+        putRequest.onsuccess = () => resolve();
+        putRequest.onerror = () => reject(putRequest.error);
+      };
+      getRequest.onerror = () => reject(getRequest.error);
+    });
+  } finally {
+    db.close();
+  }
 }

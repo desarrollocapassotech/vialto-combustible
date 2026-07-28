@@ -31,33 +31,15 @@ import { endOfMonth, formatISO, startOfMonth } from "date-fns";
 import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
+import { logout } from "@/lib/auth";
+import { CargaApi, createCarga } from "@/lib/cargas";
 import {
   addPendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
   PendingLoad,
 } from "@/lib/offlineQueue";
-
-// ─── tipos para la respuesta del backend ─────────────────────────────────────
-interface CargaApi {
-  id: string;
-  tenantId: string;
-  vehiculoId: string;
-  vehiculo: { patente: string } | null;
-  choferId: string | null;
-  chofer: { nombre: string; dni: string | null } | null;
-  estacion: string;
-  litros: number;
-  precioPorLitro: number;
-  importe: number;
-  km: number;
-  formaPago: string | null;
-  fecha: string;
-  createdBy: string;
-  createdAt: string;
-  fotoTacometro?: string | null;
-  fotoTicket?: string | null;
-}
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
   return {
@@ -193,9 +175,13 @@ const Index = () => {
             }
           } else {
             toast.error("Usuario no registrado.");
+            // Limpia también vialtoToken: si quedara vivo, App.tsx seguiría
+            // creyendo que hay sesión y rebotaría de nuevo a /inicio.
+            await logout();
             navigate("/login");
           }
         } else {
+          await logout();
           navigate("/login");
         }
       } catch (error) {
@@ -247,6 +233,19 @@ const Index = () => {
       });
   }, [userRole, userDni]);
 
+  // Sincronización automática de la cola offline al recuperar conexión (COMB-07-T3).
+  useOfflineSync({
+    enabled: userRole === "CHOFER",
+    driverDni: userDni,
+    onLoadSynced: (pending, created) => {
+      setPendingLoads((prev) =>
+        prev.filter((p) => p.localId !== pending.localId),
+      );
+      setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
+      if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+    },
+  });
+
   useEffect(() => {
     const fetchLoads = async () => {
       if (!userRole) return;
@@ -278,8 +277,7 @@ const Index = () => {
         }
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          localStorage.removeItem("user");
-          localStorage.removeItem("vialtoToken");
+          await logout();
           navigate("/login");
           return;
         }
@@ -436,11 +434,7 @@ const Index = () => {
 
           if (canAttemptCreate) {
             try {
-              const created = await apiJson<CargaApi>(
-                "/api/combustible/chofer/cargas",
-                getToken,
-                { method: "POST", body: JSON.stringify(apiPayload) },
-              );
+              const created = await createCarga(apiPayload, getToken);
               setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
               if (created.vehiculo?.patente)
                 setLastUsedPlate(created.vehiculo.patente);
@@ -538,8 +532,7 @@ const Index = () => {
       setFormKey((prev) => prev + 1); // <-- ACTUALIZACIÓN DE LA KEY ACÁ
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("vialtoToken");
+        await logout();
         navigate("/login");
         return;
       }
@@ -580,8 +573,7 @@ const Index = () => {
       toast.success("Carga eliminada exitosamente");
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("vialtoToken");
+        await logout();
         navigate("/login");
         return;
       }
@@ -839,6 +831,7 @@ const Index = () => {
           }
           kmError={kmError}
           onClearKmError={() => setKmError(null)}
+          autoCalculatePrice={userRole === "CHOFER"}
         />
       </Dialog>
     </div>
