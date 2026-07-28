@@ -461,8 +461,11 @@ const Index = () => {
             // fotoTacometro/fotoTicket ya viajan de forma estructurada en
             // fotoTacometro/fotoTicket (blob u url); no duplicarlos dentro de
             // "payload" evita que T3 tenga que reconciliar dos fuentes.
-            const { fotoTacometro: _ft, fotoTicket: _tk, ...pendingPayload } =
-              apiPayload;
+            const {
+              fotoTacometro: _ft,
+              fotoTicket: _tk,
+              ...pendingPayload
+            } = apiPayload;
 
             try {
               const pending = await addPendingLoad({
