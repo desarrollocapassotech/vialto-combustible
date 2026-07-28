@@ -39,6 +39,16 @@ function loadSavedLogin(): Partial<SavedLogin> | null {
   return null;
 }
 
+const getAdminUrl = () => {
+  const hostname = window.location.hostname;
+
+  if (hostname.includes("vialto.uno") && !hostname.includes("qa")) {
+    return "https://admin.vialto.uno/";
+  }
+
+  return "https://vialto-frontend-qa.onrender.com/";
+};
+
 const Login = () => {
   const [dni, setDni] = useState(() => loadSavedLogin()?.dni ?? "");
   const [password, setPassword] = useState(
@@ -155,13 +165,12 @@ const Login = () => {
       </div>
 
       <div className="mt-4">
-        <button
-          type="button"
-          onClick={() => navigate("/login-administrador")}
-          className="text-white/20 text-xs hover:text-white/40 transition-colors"
+        <a
+          href={getAdminUrl()}
+          className="text-white/20 text-xs hover:text-white/40 transition-colors inline-block cursor-pointer"
         >
           Acceso administrador
-        </button>
+        </a>
       </div>
     </div>
   );
