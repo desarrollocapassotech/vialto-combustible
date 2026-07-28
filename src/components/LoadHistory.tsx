@@ -1,5 +1,16 @@
 import { useState } from "react";
 import { LoadData } from "@/types/load";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface LoadHistoryProps {
   loads: LoadData[];
@@ -49,15 +60,33 @@ const ErrorBadge = () => (
 );
 
 const BtnDelete = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
-  <button
-    type="button"
-    onClick={() => {
-      if (window.confirm("¿Eliminar esta carga?")) onClick();
-    }}
-    className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-destructive/30 bg-card text-destructive hover:bg-destructive/5 transition-colors${fullWidth ? " w-full" : ""}`}
-  >
-    Eliminar
-  </button>
+  <AlertDialog>
+    <AlertDialogTrigger asChild>
+      <button
+        type="button"
+        className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-destructive/30 bg-card text-destructive hover:bg-destructive/5 transition-colors${fullWidth ? " w-full" : ""}`}
+      >
+        Eliminar
+      </button>
+    </AlertDialogTrigger>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>¿Eliminar esta carga?</AlertDialogTitle>
+        <AlertDialogDescription>
+          Esta acción no se puede deshacer.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+        <AlertDialogAction
+          onClick={onClick}
+          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        >
+          Eliminar
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 );
 
 const BtnRetry = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (

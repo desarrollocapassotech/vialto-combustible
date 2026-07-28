@@ -210,7 +210,7 @@ const Index = () => {
       .then((data) => {
         if (data?.patente) setLastUsedPlate(data.patente);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [userRole]);
 
   useEffect(() => {
@@ -245,11 +245,23 @@ const Index = () => {
     if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
   };
 
+  // Refleja en el estado de React el error que ya se persistió en IndexedDB
+  // (COMB-07-T4), tanto si lo marcó la sincronización automática como un
+  // reintento manual — sin esto, la UI queda mostrando "Pendiente" hasta el
+  // próximo reload en vez de pasar a "Error de sincronización" al instante.
+  const applyPendingLoadError = (localId: string, message?: string) => {
+    setPendingLoads((prev) =>
+      prev.map((p) => (p.localId === localId ? { ...p, lastError: message } : p)),
+    );
+  };
+
   // Sincronización automática de la cola offline al recuperar conexión (COMB-07-T3).
   useOfflineSync({
     enabled: userRole === "CHOFER",
     driverDni: userDni,
     onLoadSynced: handleLoadSynced,
+    onLoadError: (pending, message) =>
+      applyPendingLoadError(pending.localId, message),
   });
 
   // Reintento manual de una carga pendiente con error (COMB-07-T4, botón "Reintentar").
@@ -275,13 +287,7 @@ const Index = () => {
       // Refleja acá lo que retryPendingLoad ya persistió en IndexedDB: marca
       // el error, o lo deja sin marcar si fue un problema de red transitorio
       // (para que la sincronización automática la retome sola al reconectar).
-      setPendingLoads((prev) =>
-        prev.map((p) =>
-          p.localId === localId
-            ? { ...p, lastError: isNetErr ? undefined : message }
-            : p,
-        ),
-      );
+      applyPendingLoadError(localId, isNetErr ? undefined : message);
       toast.error(message);
     }
   };
@@ -744,41 +750,41 @@ const Index = () => {
           {/* Tarjetas Admin (o Super Admin dentro de empresa) */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {driverCount !== null && (
-                <div
-                  onClick={() => navigate("/admin/choferes")}
-                  className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
-                >
-                  <Truck className="h-8 w-8 text-[#E8470A]" />
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">
-                      Choferes Registrados
-                    </span>
-                    <span className="text-2xl font-bold text-[#E8470A]">
-                      {driverCount}
-                    </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {driverCount !== null && (
+                  <div
+                    onClick={() => navigate("/admin/choferes")}
+                    className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
+                  >
+                    <Truck className="h-8 w-8 text-[#E8470A]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">
+                        Choferes Registrados
+                      </span>
+                      <span className="text-2xl font-bold text-[#E8470A]">
+                        {driverCount}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
-              {monthlyLoadCount !== null && (
-                <a
-                  href="#historial"
-                  className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
-                >
-                  <Calendar className="h-8 w-8 text-[#E8470A]" />
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-500">
-                      Cargas este mes
-                    </span>
-                    <span className="text-2xl font-bold text-[#E8470A]">
-                      {monthlyLoadCount}
-                    </span>
-                  </div>
-                </a>
-              )}
-            </div>
-          )}
+                )}
+                {monthlyLoadCount !== null && (
+                  <a
+                    href="#historial"
+                    className="bg-white rounded-lg shadow-md p-4 flex items-center justify-start space-x-4 cursor-pointer hover:shadow-lg transition-shadow"
+                  >
+                    <Calendar className="h-8 w-8 text-[#E8470A]" />
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">
+                        Cargas este mes
+                      </span>
+                      <span className="text-2xl font-bold text-[#E8470A]">
+                        {monthlyLoadCount}
+                      </span>
+                    </div>
+                  </a>
+                )}
+              </div>
+            )}
 
           {/* Botón nueva carga + selector de mes (solo CHOFER) */}
           {userRole === "CHOFER" && (
@@ -815,24 +821,24 @@ const Index = () => {
           {/* Exportación de datos */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <ExportData loads={filteredLoads} />
-            </div>
-          )}
+              <div className="bg-white rounded-lg shadow-md p-4">
+                <ExportData loads={filteredLoads} />
+              </div>
+            )}
 
           {/* Filtro */}
           {(userRole === "ADMIN" ||
             (userRole === "SUPER_ADMIN" && empresaId)) && (
-            <div className="bg-white rounded-lg shadow-md p-4">
-              <Input
-                type="text"
-                placeholder="Buscar por chofer o patente..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          )}
+              <div className="bg-white rounded-lg shadow-md p-4">
+                <Input
+                  type="text"
+                  placeholder="Buscar por chofer o patente..."
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+            )}
 
           {/* Historial de cargas (no para super admin sin empresa) */}
           {(userRole !== "SUPER_ADMIN" || empresaId) && (

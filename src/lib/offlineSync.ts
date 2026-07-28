@@ -124,14 +124,23 @@ async function syncOneLoad(
  * reconexión, una red inestable terminaría repitiendo contra el backend un
  * pedido que ya sabemos que va a fallar. Esas cargas solo se reintentan a
  * demanda (ver retryPendingLoad, disparado por el botón "Reintentar").
+ *
+ * `onLoadError` es opcional porque quien llama a esta función puede no tener
+ * estado de UI que sincronizar (por ahora el único caller, useOfflineSync,
+ * siempre lo pasa) — se invoca por cada carga marcada con error, para que el
+ * caller pueda reflejar ese error en su propio estado sin esperar a un
+ * refresh completo de la cola.
  */
 export async function syncPendingLoads(
   driverDni: number,
   getToken: TokenGetter,
   onLoadSynced: (pending: PendingLoad, created: CargaApi) => void,
-  options: { skipErrored?: boolean } = {},
+  options: {
+    skipErrored?: boolean;
+    onLoadError?: (pending: PendingLoad, message: string) => void;
+  } = {},
 ): Promise<number> {
-  const { skipErrored = true } = options;
+  const { skipErrored = true, onLoadError } = options;
   const allPending = await getPendingLoads(driverDni);
   const pendingLoads = skipErrored
     ? allPending.filter((p) => !p.lastError)
@@ -157,7 +166,9 @@ export async function syncPendingLoads(
         `La carga ${pending.localId} no se pudo sincronizar:`,
         error,
       );
-      await recordSyncError(pending, syncErrorMessage(error), getToken);
+      const message = syncErrorMessage(error);
+      await recordSyncError(pending, message, getToken);
+      onLoadError?.(pending, message);
     }
   }
 
