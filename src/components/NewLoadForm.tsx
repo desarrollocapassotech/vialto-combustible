@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiJson, isNetworkError } from "@/lib/api";
 import { uploadFoto } from "@/lib/cargas";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -140,6 +140,9 @@ interface PhotoUploaderProps {
   isReadOnly: boolean;
 }
 
+/** Formatos aceptados para foto de tacómetro/ticket (VTO-194). */
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
 const PhotoUploader = ({
   label,
   previewUrl,
@@ -147,21 +150,25 @@ const PhotoUploader = ({
   onClear,
   isReadOnly,
 }: PhotoUploaderProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith("image/")) {
-        toast.error("El archivo debe ser una imagen (PNG, JPG, etc.)");
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
+      if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+        toast.error("La imagen debe ser JPG, PNG o WEBP");
+      } else if (file.size > 10 * 1024 * 1024) {
         toast.error("La imagen no debe superar 10 MB");
-        return;
+      } else {
+        onFileSelect(file);
       }
-      onFileSelect(file);
     }
+    // Permite volver a elegir el mismo archivo dos veces seguidas: sin esto,
+    // el navegador no dispara onChange si el path no cambió desde la
+    // selección anterior.
+    e.target.value = "";
   };
 
   return (
@@ -194,7 +201,7 @@ const PhotoUploader = ({
       ) : (
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => setIsSourceSheetOpen(true)}
           className="rounded-xl border-2 border-dashed border-gray-300 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-all flex flex-col items-center justify-center p-6 aspect-video bg-white text-gray-500 space-y-2 group"
         >
           <Camera className="h-8 w-8 text-gray-400 group-hover:text-[#E8470A]" />
@@ -202,15 +209,66 @@ const PhotoUploader = ({
           <span className="text-xs text-gray-400">
             JPG, PNG o WEBP de hasta 10 MB
           </span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
         </button>
       )}
+
+      {/* Input oculto para tomar una foto nueva con la cámara (VTO-194). */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      {/* Input oculto para elegir una foto existente de la galería (VTO-194). */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      <Sheet open={isSourceSheetOpen} onOpenChange={setIsSourceSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetHeader>
+            <SheetTitle>{label}</SheetTitle>
+          </SheetHeader>
+          <div className="grid grid-cols-1 gap-3 mt-6 pb-8">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSourceSheetOpen(false);
+                cameraInputRef.current?.click();
+              }}
+              className="min-h-[88px] rounded-xl border-2 border-gray-200 bg-white text-gray-600 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-colors flex items-center gap-4 px-4 touch-manipulation"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8470A]/10 text-[#E8470A]">
+                <Camera className="h-6 w-6" />
+              </span>
+              <span className="text-base font-medium text-left">
+                Sacar una foto
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSourceSheetOpen(false);
+                galleryInputRef.current?.click();
+              }}
+              className="min-h-[88px] rounded-xl border-2 border-gray-200 bg-white text-gray-600 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-colors flex items-center gap-4 px-4 touch-manipulation"
+            >
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8470A]/10 text-[#E8470A]">
+                <ImagePlus className="h-6 w-6" />
+              </span>
+              <span className="text-base font-medium text-left">
+                Buscar en la galería
+              </span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
