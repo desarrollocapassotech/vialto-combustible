@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { LoadData } from "@/types/load";
+import { fmtDate, fmtNum } from "@/lib/loadFormat";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,7 +16,7 @@ import {
 interface LoadHistoryProps {
   loads: LoadData[];
   filter: string;
-  onEdit: (load: LoadData) => void;
+  onView: (load: LoadData) => void;
   onDelete: (id: string) => void;
   showDelete?: boolean;
   /** Reintentar sincronizar una carga pendiente que quedó con error (COMB-07-T4). */
@@ -26,24 +27,13 @@ interface LoadHistoryProps {
 
 const ITEMS_PER_PAGE = 10;
 
-const fmtDate = (date: Date) =>
-  new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-
-const fmtNum = (n: number) =>
-  n.toLocaleString("es-ES", { minimumFractionDigits: 0 });
-
-const BtnEdit = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
+const BtnView = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
   <button
     type="button"
     onClick={onClick}
     className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-border bg-card hover:bg-muted transition-colors${fullWidth ? " w-full" : ""}`}
   >
-    Editar
+    Ver
   </button>
 );
 
@@ -123,7 +113,7 @@ const SyncErrorActions = ({
 const LoadHistory = ({
   loads,
   filter,
-  onEdit,
+  onView,
   onDelete,
   showDelete = true,
   onRetryPending,
@@ -188,7 +178,7 @@ const LoadHistory = ({
             </div>
             {!load.pending && (
               <div className={showDelete ? "grid grid-cols-2 gap-2 pt-1" : "pt-1"}>
-                <BtnEdit onClick={() => onEdit(load)} fullWidth />
+                <BtnView onClick={() => onView(load)} fullWidth />
                 {showDelete && <BtnDelete onClick={() => onDelete(load.id)} fullWidth />}
               </div>
             )}
@@ -238,7 +228,7 @@ const LoadHistory = ({
                 <td className="px-4 py-2.5">
                   {!load.pending && (
                     <div className="flex gap-2">
-                      <BtnEdit onClick={() => onEdit(load)} />
+                      <BtnView onClick={() => onView(load)} />
                       {showDelete && <BtnDelete onClick={() => onDelete(load.id)} />}
                     </div>
                   )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import NewLoadForm from "@/components/NewLoadForm";
+import { LoadViewModal } from "@/components/LoadViewModal";
 import LoadHistory from "@/components/LoadHistory";
 import ExportData from "@/components/ExportData";
 import { motion } from "framer-motion";
@@ -106,6 +107,7 @@ const Index = () => {
   const [loads, setLoads] = useState<LoadData[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editLoad, setEditLoad] = useState<LoadData | null>(null);
+  const [viewLoad, setViewLoad] = useState<LoadData | null>(null);
   const [kmError, setKmError] = useState<string | null>(null);
   const [lastUsedPlate, setLastUsedPlate] = useState<string>("");
   const [filter, setFilter] = useState("");
@@ -872,10 +874,7 @@ const Index = () => {
               <LoadHistory
                 loads={filteredLoads}
                 filter={filter}
-                onEdit={(load) => {
-                  setEditLoad(load);
-                  setIsFormOpen(true);
-                }}
+                onView={(load) => setViewLoad(load)}
                 onDelete={handleDeleteLoad}
                 showDelete={userRole !== "CHOFER"}
                 onRetryPending={handleRetryPendingLoad}
@@ -916,6 +915,26 @@ const Index = () => {
           onClearKmError={() => setKmError(null)}
           autoCalculatePrice={userRole === "CHOFER"}
         />
+      </Dialog>
+
+      {/* Diálogo de vista (detalle de una carga, con acceso a editar) */}
+      <Dialog
+        open={viewLoad !== null}
+        onOpenChange={(open) => {
+          if (!open) setViewLoad(null);
+        }}
+      >
+        {viewLoad && (
+          <LoadViewModal
+            load={viewLoad}
+            onClose={() => setViewLoad(null)}
+            onEdit={() => {
+              setEditLoad(viewLoad);
+              setIsFormOpen(true);
+              setViewLoad(null);
+            }}
+          />
+        )}
       </Dialog>
     </div>
   );
