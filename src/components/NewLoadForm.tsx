@@ -536,7 +536,7 @@ const NewLoadForm = ({
   return (
     <DialogContent
       aria-describedby={undefined}
-      className="w-[95vw] max-w-md max-h-[90vh] max-h-[90dvh] overflow-hidden flex flex-col gap-0 p-0 sm:p-6 sm:gap-4 bg-white rounded-xl"
+      className="w-screen max-w-none h-dvh max-h-none border-0 rounded-none overflow-hidden flex flex-col gap-0 p-0 bg-white sm:w-[95vw] sm:max-w-md sm:h-auto sm:max-h-[90dvh] sm:border sm:rounded-xl sm:p-6 sm:gap-4"
     >
       <div className="flex flex-col flex-1 min-h-0">
         <DialogHeader className="flex-shrink-0 p-4 border-b border-gray-100 sm:p-0 sm:border-0 space-y-2">
