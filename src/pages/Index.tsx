@@ -42,6 +42,7 @@ import {
 } from "@/lib/offlineQueue";
 import { retryPendingLoad } from "@/lib/offlineSync";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { MonthFilterControl, currentMonthValue } from "@/components/MonthFilterControl";
 
 function mapCargaToLoadData(c: CargaApi): LoadData {
   return {
@@ -91,11 +92,6 @@ function mapPendingToLoadData(p: PendingLoad): LoadData {
   } as LoadData;
 }
 
-function currentMonthValue(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
 const SUPER_ADMIN_EMPRESA_KEY = "superAdminEmpresaId";
 const SUPER_ADMIN_EMPRESA_NOMBRE_KEY = "superAdminEmpresaNombre";
 
@@ -119,6 +115,9 @@ const Index = () => {
   const [userLicensePlate, setUserLicensePlate] = useState<string | null>(null);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Loading del historial (refetch por cambio de mes, etc.) — separado del
+  // isLoading de arranque para no tapar toda la pantalla en cada refiltrado.
+  const [isLoadsLoading, setIsLoadsLoading] = useState(false);
   const [driverCount, setDriverCount] = useState<number | null>(null);
   const [monthlyLoadCount, setMonthlyLoadCount] = useState<number | null>(null);
   const [empresas, setEmpresas] = useState<EmpresaItem[]>([]);
@@ -307,7 +306,7 @@ const Index = () => {
   useEffect(() => {
     const fetchLoads = async () => {
       if (!userRole) return;
-      setIsLoading(true);
+      setIsLoadsLoading(true);
       try {
         if (userRole === "CHOFER") {
           // Cargas del chofer desde la API de Vialto (JWT propio en localStorage)
@@ -342,7 +341,7 @@ const Index = () => {
         console.error("Error al obtener las cargas:", error);
         toast.error("Error al cargar las cargas");
       } finally {
-        setIsLoading(false);
+        setIsLoadsLoading(false);
       }
     };
 
@@ -789,7 +788,7 @@ const Index = () => {
               </div>
             )}
 
-          {/* Botón nueva carga + selector de mes (solo CHOFER) */}
+          {/* Botón nueva carga (solo CHOFER) */}
           {userRole === "CHOFER" && (
             <div className="flex flex-wrap items-center gap-3 justify-between">
               <Button
@@ -802,22 +801,6 @@ const Index = () => {
                 <PlusCircle size={20} className="mr-2" />
                 Nueva Carga
               </Button>
-              <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm px-3 py-2">
-                <Calendar className="h-4 w-4 text-[#E8470A]" />
-                <label
-                  htmlFor="mes-filtro"
-                  className="text-sm text-gray-500 whitespace-nowrap"
-                >
-                  Mes:
-                </label>
-                <input
-                  id="mes-filtro"
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="border-0 text-sm text-gray-800 focus:outline-none"
-                />
-              </div>
             </div>
           )}
 
@@ -849,6 +832,43 @@ const Index = () => {
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
                 Historial de Cargas
               </h2>
+              {userRole === "CHOFER" && (
+                <div className="mb-4">
+                  <p className="mb-2 text-sm text-gray-500">
+                    Filtrar historial por mes
+                  </p>
+                  <MonthFilterControl
+                    value={selectedMonth}
+                    onChange={setSelectedMonth}
+                  />
+                </div>
+              )}
+              {isLoadsLoading && (
+                <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+                  <svg
+                    className="h-4 w-4 animate-spin text-[#E8470A]"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  Actualizando historial...
+                </div>
+              )}
               <LoadHistory
                 loads={filteredLoads}
                 filter={filter}

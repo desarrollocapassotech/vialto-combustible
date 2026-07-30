@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -535,7 +536,7 @@ const NewLoadForm = ({
   return (
     <DialogContent
       aria-describedby={undefined}
-      className="w-[95vw] max-w-md max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0 sm:p-6 sm:gap-4 bg-white rounded-xl"
+      className="w-screen max-w-none h-dvh max-h-none border-0 rounded-none overflow-hidden flex flex-col gap-0 p-0 bg-white sm:w-[95vw] sm:max-w-md sm:h-auto sm:max-h-[90dvh] sm:border sm:rounded-xl sm:p-6 sm:gap-4"
     >
       <div className="flex flex-col flex-1 min-h-0">
         <DialogHeader className="flex-shrink-0 p-4 border-b border-gray-100 sm:p-0 sm:border-0 space-y-2">
@@ -550,8 +551,9 @@ const NewLoadForm = ({
         </DialogHeader>
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto p-4 space-y-4 sm:overflow-visible sm:flex-none"
+          className="flex flex-1 flex-col min-h-0 sm:flex-none"
         >
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 sm:overflow-visible sm:flex-none">
           {/* Monto Total - estilo destacado */}
           <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
@@ -1018,9 +1020,10 @@ const NewLoadForm = ({
               isReadOnly={!!defaultValues}
             />
           </div>
+          </div>
 
-          {/* Botones de acción */}
-          <div className="flex flex-col-reverse gap-3 pt-6 sm:flex-row sm:justify-end sm:space-x-2 sm:pt-4">
+          {/* Botones de acción — fijos al pie, fuera del área scrolleable */}
+          <DialogFooter className="flex-shrink-0 gap-3 border-t border-gray-100 px-4 py-4 sm:border-0 sm:p-0 sm:pt-4">
             <Button
               type="button"
               variant="outline"
@@ -1042,7 +1045,7 @@ const NewLoadForm = ({
             >
               {isSubmitting ? "Cargando..." : "Guardar"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </div>
     </DialogContent>
