@@ -34,11 +34,13 @@ import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { CargaApi, createCarga } from "@/lib/cargas";
+import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
 import {
   addPendingLoad,
   deletePendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
+  updatePendingLoad,
   PendingLoad,
 } from "@/lib/offlineQueue";
 import { retryPendingLoad } from "@/lib/offlineSync";
@@ -129,6 +131,12 @@ const Index = () => {
   const navigate = useNavigate();
   const logoUrl = useEmpresaLogo(empresaId);
 
+  // COMB-07-T8: actualiza memoria y localStorage juntos, para que no se desincronicen.
+  const rememberLastUsedPlate = (dni: number, patente: string) => {
+    setLastUsedPlate(patente);
+    writeLastUsedPlate(dni, patente);
+  };
+
   useEffect(() => {
     const fetchUserRole = async () => {
       setIsLoading(true);
@@ -200,6 +208,13 @@ const Index = () => {
     fetchUserRole();
   }, [navigate]);
 
+  // COMB-07-T8: precarga offline; el fetch online de abajo la sobreescribe si hay conexión.
+  useEffect(() => {
+    if (userRole !== "CHOFER" || userDni == null) return;
+    const stored = readLastUsedPlate(userDni);
+    if (stored) setLastUsedPlate(stored);
+  }, [userRole, userDni]);
+
   useEffect(() => {
     if (userRole !== "CHOFER") return;
     const token = localStorage.getItem("vialtoToken");
@@ -209,10 +224,13 @@ const Index = () => {
       async () => token,
     )
       .then((data) => {
-        if (data?.patente) setLastUsedPlate(data.patente);
+        // COMB-07-T8: se persiste, no solo se refleja en memoria.
+        if (data?.patente && userDni != null) {
+          rememberLastUsedPlate(userDni, data.patente);
+        }
       })
       .catch(() => { });
-  }, [userRole]);
+  }, [userRole, userDni]);
 
   useEffect(() => {
     if (userRole !== "CHOFER" || userDni == null) {
@@ -243,7 +261,9 @@ const Index = () => {
       prev.filter((p) => p.localId !== pending.localId),
     );
     setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
-    if (created.vehiculo?.patente) setLastUsedPlate(created.vehiculo.patente);
+    if (created.vehiculo?.patente) {
+      rememberLastUsedPlate(pending.driverDni, created.vehiculo.patente);
+    }
   };
 
   // Refleja en el estado de React el error que ya se persistió en IndexedDB
@@ -264,6 +284,14 @@ const Index = () => {
     onLoadError: (pending, message) =>
       applyPendingLoadError(pending.localId, message),
   });
+
+  // Abre el formulario para corregir una carga pendiente con error (COMB-07-T7, botón "Editar").
+  const handleEditPendingLoad = (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
+    if (!pending) return;
+    setEditLoad(mapPendingToLoadData(pending));
+    setIsFormOpen(true);
+  };
 
   // Reintento manual de una carga pendiente con error (COMB-07-T4, botón "Reintentar").
   const handleRetryPendingLoad = async (localId: string) => {
@@ -469,8 +497,27 @@ const Index = () => {
           fotoTacometro: data.fotoTacometro,
           fotoTicket: data.fotoTicket,
         };
+        // Payload sin fotos, para IndexedDB — compartido con el alta offline.
+        const {
+          fotoTacometro: _ft,
+          fotoTicket: _tk,
+          ...pendingPayload
+        } = apiPayload;
 
-        if (editLoad) {
+        if (editLoad?.pending && editLoad.pendingLocalId) {
+          // T7: corregir una carga pendiente con error, sin tocar sus fotos.
+          const localId = editLoad.pendingLocalId;
+          await updatePendingLoad(localId, pendingPayload);
+          setPendingLoads((prev) =>
+            prev.map((p) =>
+              p.localId === localId ? { ...p, payload: pendingPayload } : p,
+            ),
+          );
+          setKmError(null);
+          toast.success(
+            "Carga corregida. Tocá \"Reintentar\" para sincronizarla.",
+          );
+        } else if (editLoad) {
           // T6: editar carga vía API
           const updated = await apiJson<CargaApi>(
             `/api/combustible/chofer/cargas/${editLoad.id}`,
@@ -495,8 +542,9 @@ const Index = () => {
             try {
               const created = await createCarga(apiPayload, getToken);
               setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
-              if (created.vehiculo?.patente)
-                setLastUsedPlate(created.vehiculo.patente);
+              if (created.vehiculo?.patente && userDni != null) {
+                rememberLastUsedPlate(userDni, created.vehiculo.patente);
+              }
               toast.success("Carga registrada exitosamente");
             } catch (error) {
               if (!isNetworkError(error)) throw error;
@@ -517,15 +565,6 @@ const Index = () => {
               return;
             }
 
-            // fotoTacometro/fotoTicket ya viajan de forma estructurada en
-            // fotoTacometro/fotoTicket (blob u url); no duplicarlos dentro de
-            // "payload" evita que T3 tenga que reconciliar dos fuentes.
-            const {
-              fotoTacometro: _ft,
-              fotoTicket: _tk,
-              ...pendingPayload
-            } = apiPayload;
-
             try {
               const pending = await addPendingLoad({
                 driverDni: userDni,
@@ -539,6 +578,8 @@ const Index = () => {
                   : { kind: "url", url: data.fotoTicket },
               });
               setPendingLoads((prev) => [...prev, pending]);
+              // COMB-07-T8: precarga la próxima carga de esta misma sesión offline.
+              rememberLastUsedPlate(userDni, apiPayload.patente);
               toast.success(
                 "Sin conexión: la carga se guardó en el dispositivo y se sincronizará más tarde.",
               );
@@ -877,6 +918,7 @@ const Index = () => {
                 onView={(load) => setViewLoad(load)}
                 onDelete={handleDeleteLoad}
                 showDelete={userRole !== "CHOFER"}
+                onEditPending={handleEditPendingLoad}
                 onRetryPending={handleRetryPendingLoad}
                 onDeletePending={handleDeletePendingLoad}
               />

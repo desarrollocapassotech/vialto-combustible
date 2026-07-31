@@ -19,6 +19,8 @@ interface LoadHistoryProps {
   onView: (load: LoadData) => void;
   onDelete: (id: string) => void;
   showDelete?: boolean;
+  /** Editar los datos de una carga pendiente que quedó con error (COMB-07-T7). */
+  onEditPending?: (localId: string) => void;
   /** Reintentar sincronizar una carga pendiente que quedó con error (COMB-07-T4). */
   onRetryPending?: (localId: string) => void;
   /** Eliminar una carga pendiente que quedó con error (COMB-07-T4). */
@@ -89,21 +91,34 @@ const BtnRetry = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boo
   </button>
 );
 
-/** Motivo del error + acciones de una carga pendiente que falló al sincronizar (COMB-07-T4). */
+const BtnEdit = ({ onClick, fullWidth }: { onClick: () => void; fullWidth?: boolean }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`text-xs font-medium uppercase tracking-wider px-3 py-2 rounded border border-border bg-card hover:bg-muted transition-colors${fullWidth ? " w-full" : ""}`}
+  >
+    Editar
+  </button>
+);
+
+/** Motivo del error + acciones de una carga pendiente que falló al sincronizar (COMB-07-T4, +Editar en COMB-07-T7). */
 const SyncErrorActions = ({
   message,
+  onEdit,
   onRetry,
   onDelete,
   fullWidth,
 }: {
   message: string;
+  onEdit: () => void;
   onRetry: () => void;
   onDelete: () => void;
   fullWidth?: boolean;
 }) => (
   <div className="space-y-2">
     <p className="text-xs text-red-700">{message}</p>
-    <div className={fullWidth ? "grid grid-cols-2 gap-2" : "flex gap-2"}>
+    <div className={fullWidth ? "grid grid-cols-3 gap-2" : "flex flex-wrap gap-2"}>
+      <BtnEdit onClick={onEdit} fullWidth={fullWidth} />
       <BtnRetry onClick={onRetry} fullWidth={fullWidth} />
       <BtnDelete onClick={onDelete} fullWidth={fullWidth} />
     </div>
@@ -116,6 +131,7 @@ const LoadHistory = ({
   onView,
   onDelete,
   showDelete = true,
+  onEditPending,
   onRetryPending,
   onDeletePending,
 }: LoadHistoryProps) => {
@@ -186,6 +202,7 @@ const LoadHistory = ({
               <div className="pt-1">
                 <SyncErrorActions
                   message={load.syncError}
+                  onEdit={() => onEditPending?.(load.pendingLocalId!)}
                   onRetry={() => onRetryPending?.(load.pendingLocalId!)}
                   onDelete={() => onDeletePending?.(load.pendingLocalId!)}
                   fullWidth
@@ -236,6 +253,7 @@ const LoadHistory = ({
                     <div className="max-w-xs">
                       <SyncErrorActions
                         message={load.syncError}
+                        onEdit={() => onEditPending?.(load.pendingLocalId!)}
                         onRetry={() => onRetryPending?.(load.pendingLocalId!)}
                         onDelete={() => onDeletePending?.(load.pendingLocalId!)}
                       />
