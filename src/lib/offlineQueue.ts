@@ -161,6 +161,16 @@ export async function updatePendingLoadPhoto(
   });
 }
 
+// Corrige los datos de una carga pendiente (COMB-07-T7); sin fotos a propósito, son inmutables acá.
+export async function updatePendingLoad(
+  localId: string,
+  payload: PendingLoadPayload,
+): Promise<void> {
+  await mutatePendingLoad(localId, (record) => {
+    record.payload = payload;
+  });
+}
+
 /** Marca una carga pendiente con el motivo por el que falló su último intento de sincronización (COMB-07-T4). */
 export async function markPendingLoadError(
   localId: string,
