@@ -40,6 +40,7 @@ import {
   deletePendingLoad,
   getPendingLoads,
   resolvePendingPhotoUrl,
+  updatePendingLoad,
   PendingLoad,
 } from "@/lib/offlineQueue";
 import { retryPendingLoad } from "@/lib/offlineSync";
@@ -284,6 +285,14 @@ const Index = () => {
       applyPendingLoadError(pending.localId, message),
   });
 
+  // Abre el formulario para corregir una carga pendiente con error (COMB-07-T7, botón "Editar").
+  const handleEditPendingLoad = (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
+    if (!pending) return;
+    setEditLoad(mapPendingToLoadData(pending));
+    setIsFormOpen(true);
+  };
+
   // Reintento manual de una carga pendiente con error (COMB-07-T4, botón "Reintentar").
   const handleRetryPendingLoad = async (localId: string) => {
     const pending = pendingLoads.find((p) => p.localId === localId);
@@ -488,8 +497,27 @@ const Index = () => {
           fotoTacometro: data.fotoTacometro,
           fotoTicket: data.fotoTicket,
         };
+        // Payload sin fotos, para IndexedDB — compartido con el alta offline.
+        const {
+          fotoTacometro: _ft,
+          fotoTicket: _tk,
+          ...pendingPayload
+        } = apiPayload;
 
-        if (editLoad) {
+        if (editLoad?.pending && editLoad.pendingLocalId) {
+          // T7: corregir una carga pendiente con error, sin tocar sus fotos.
+          const localId = editLoad.pendingLocalId;
+          await updatePendingLoad(localId, pendingPayload);
+          setPendingLoads((prev) =>
+            prev.map((p) =>
+              p.localId === localId ? { ...p, payload: pendingPayload } : p,
+            ),
+          );
+          setKmError(null);
+          toast.success(
+            "Carga corregida. Tocá \"Reintentar\" para sincronizarla.",
+          );
+        } else if (editLoad) {
           // T6: editar carga vía API
           const updated = await apiJson<CargaApi>(
             `/api/combustible/chofer/cargas/${editLoad.id}`,
@@ -536,15 +564,6 @@ const Index = () => {
               );
               return;
             }
-
-            // fotoTacometro/fotoTicket ya viajan de forma estructurada en
-            // fotoTacometro/fotoTicket (blob u url); no duplicarlos dentro de
-            // "payload" evita que T3 tenga que reconciliar dos fuentes.
-            const {
-              fotoTacometro: _ft,
-              fotoTicket: _tk,
-              ...pendingPayload
-            } = apiPayload;
 
             try {
               const pending = await addPendingLoad({
@@ -899,6 +918,7 @@ const Index = () => {
                 onView={(load) => setViewLoad(load)}
                 onDelete={handleDeleteLoad}
                 showDelete={userRole !== "CHOFER"}
+                onEditPending={handleEditPendingLoad}
                 onRetryPending={handleRetryPendingLoad}
                 onDeletePending={handleDeletePendingLoad}
               />
