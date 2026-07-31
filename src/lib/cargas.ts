@@ -39,6 +39,10 @@ export interface CargaPayload {
   fecha: string;
   fotoTacometro: string;
   fotoTicket: string;
+  // COMB-07-T5: solo presente cuando el alta viene de un reintento de sincronización — le
+  // permite al backend resolver automáticamente el error que había quedado registrado para
+  // este mismo intento (ver offlineSync.ts, syncOneLoad).
+  localId?: string;
 }
 
 export async function uploadFoto(
