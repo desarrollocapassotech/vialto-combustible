@@ -35,6 +35,7 @@ import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { CargaApi, createCarga } from "@/lib/cargas";
 import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
+import { extractApiErrorMessage, fmtMensajeError } from "@/lib/loadFormat";
 import {
   addPendingLoad,
   deletePendingLoad,
@@ -91,7 +92,9 @@ function mapPendingToLoadData(p: PendingLoad): LoadData {
     empresaId: "",
     pending: true,
     pendingLocalId: p.localId,
-    syncError: p.lastError,
+    // p.lastError se guarda crudo (ver offlineSync.ts); se traduce recién acá, al
+    // mostrarlo — IndexedDB y el reporte al backend siguen con el texto original.
+    syncError: p.lastError ? fmtMensajeError(p.lastError) : p.lastError,
   } as LoadData;
 }
 
@@ -307,17 +310,22 @@ const Index = () => {
       handleLoadSynced(pending, created);
       toast.success("Carga sincronizada exitosamente");
     } catch (error) {
-      const isNetErr = isNetworkError(error);
-      const message = isNetErr
-        ? "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo."
-        : error instanceof ApiError && error.message
-          ? error.message
-          : "No se pudo sincronizar la carga.";
-      // Refleja acá lo que retryPendingLoad ya persistió en IndexedDB: marca
-      // el error, o lo deja sin marcar si fue un problema de red transitorio
-      // (para que la sincronización automática la retome sola al reconectar).
-      applyPendingLoadError(localId, isNetErr ? undefined : message);
-      toast.error(message);
+      if (isNetworkError(error)) {
+        // Sin marcar: la sincronización automática la retoma sola al reconectar.
+        applyPendingLoadError(localId, undefined);
+        toast.error(
+          "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.",
+        );
+        return;
+      }
+      // Se guarda crudo (igual que ya hace retryPendingLoad en IndexedDB) y
+      // se traduce recién para el toast — mismo criterio que mapPendingToLoadData.
+      const rawMessage = extractApiErrorMessage(
+        error,
+        "No se pudo sincronizar la carga.",
+      );
+      applyPendingLoadError(localId, rawMessage);
+      toast.error(fmtMensajeError(rawMessage));
     }
   };
 
@@ -640,10 +648,9 @@ const Index = () => {
         return;
       }
       console.error("Error al manejar la carga:", error);
-      const msg =
-        error instanceof ApiError && error.message
-          ? error.message
-          : "Error al registrar o actualizar la carga";
+      const msg = fmtMensajeError(
+        extractApiErrorMessage(error, "Error al registrar o actualizar la carga"),
+      );
       const isKmError =
         typeof msg === "string" && msg.toLowerCase().includes("km");
       if (isKmError) {
