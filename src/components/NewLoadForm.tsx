@@ -570,7 +570,7 @@ const NewLoadForm = ({
           {/* Monto Total - estilo destacado */}
           <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Monto Total
+              Monto Total <span className="text-red-500">*</span>
             </label>
             <Input
               required
@@ -655,7 +655,7 @@ const NewLoadForm = ({
           {/* Litros Cargados */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Litros Cargados
+              Litros Cargados <span className="text-red-500">*</span>
             </label>
             <Input
               required
@@ -690,7 +690,7 @@ const NewLoadForm = ({
           {!autoCalculatePrice && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Precio por Litro
+                Precio por Litro <span className="text-red-500">*</span>
               </label>
               <Input
                 required
@@ -776,7 +776,7 @@ const NewLoadForm = ({
           {/* Kilometros */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Kilómetros
+              Kilómetros <span className="text-red-500">*</span>
             </label>
             <Input
               required
