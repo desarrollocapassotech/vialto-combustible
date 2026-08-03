@@ -13,8 +13,9 @@
  * a intentar).
  */
 
-import { ApiError, isNetworkError, TokenGetter } from "./api";
+import { isNetworkError, TokenGetter } from "./api";
 import { CargaApi, CargaPayload, createCarga, reportSyncError, uploadFoto } from "./cargas";
+import { extractApiErrorMessage } from "./loadFormat";
 import {
   PendingLoad,
   PendingLoadPhoto,
@@ -25,10 +26,10 @@ import {
   updatePendingLoadPhoto,
 } from "./offlineQueue";
 
+// Mensaje crudo, sin traducir: se guarda en IndexedDB y se reporta al backend
+// tal cual. La traducción para mostrarle al chofer se aplica en la UI (Index.tsx).
 function syncErrorMessage(error: unknown): string {
-  return error instanceof ApiError && error.message
-    ? error.message
-    : "No se pudo sincronizar la carga.";
+  return extractApiErrorMessage(error, "No se pudo sincronizar la carga.");
 }
 
 /**
