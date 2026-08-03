@@ -33,7 +33,7 @@ import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { logout } from "@/lib/auth";
-import { CargaApi, createCarga } from "@/lib/cargas";
+import { CargaApi, createCarga, resolveSyncError } from "@/lib/cargas";
 import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
 import {
   addPendingLoad,
@@ -323,6 +323,7 @@ const Index = () => {
 
   // Eliminar una carga pendiente con error, a pedido del chofer (COMB-07-T4).
   const handleDeletePendingLoad = async (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
     try {
       await deletePendingLoad(localId);
       setPendingLoads((prev) => prev.filter((p) => p.localId !== localId));
@@ -330,6 +331,24 @@ const Index = () => {
     } catch (error) {
       console.error("Error al eliminar la carga pendiente:", error);
       toast.error("No se pudo eliminar la carga");
+      return;
+    }
+
+    // Si tenía un error reportado, avisamos al backend para que la alerta
+    // deje de aparecerle al admin — best-effort: la carga ya se borró
+    // localmente, esto no debe bloquear ni reportarse como falla al chofer.
+    if (pending?.lastError) {
+      const token = localStorage.getItem("vialtoToken");
+      if (token) {
+        try {
+          await resolveSyncError(localId, async () => token);
+        } catch (error) {
+          console.error(
+            `No se pudo notificar al backend la eliminación de la carga con error ${localId}:`,
+            error,
+          );
+        }
+      }
     }
   };
 

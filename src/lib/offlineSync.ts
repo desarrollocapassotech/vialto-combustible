@@ -94,6 +94,7 @@ async function syncOneLoad(
     ...pending.payload,
     fotoTacometro,
     fotoTicket,
+    localId: pending.localId,
   };
 
   const created = await createCarga(payload, getToken);

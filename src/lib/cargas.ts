@@ -39,6 +39,10 @@ export interface CargaPayload {
   fecha: string;
   fotoTacometro: string;
   fotoTicket: string;
+  // COMB-07-T5: solo presente cuando el alta viene de un reintento de sincronización — le
+  // permite al backend resolver automáticamente el error que había quedado registrado para
+  // este mismo intento (ver offlineSync.ts, syncOneLoad).
+  localId?: string;
 }
 
 export async function uploadFoto(
@@ -84,5 +88,22 @@ export async function reportSyncError(
     "/api/combustible/chofer/errores-sincronizacion",
     getToken,
     { method: "POST", body: JSON.stringify({ mensaje, payload }) },
+  );
+}
+
+/**
+ * Marca como resuelto, del lado del backend, el error de sincronización
+ * reportado antes para esta carga (ej. al eliminarla localmente en vez de
+ * corregirla: no tiene sentido que la alerta le siga apareciendo al admin).
+ * Quien llama decide si conviene tratarlo como best-effort.
+ */
+export async function resolveSyncError(
+  localId: string,
+  getToken: TokenGetter,
+): Promise<void> {
+  await apiJson<unknown>(
+    `/api/combustible/chofer/errores-sincronizacion/${encodeURIComponent(localId)}/resolver`,
+    getToken,
+    { method: "POST" },
   );
 }
