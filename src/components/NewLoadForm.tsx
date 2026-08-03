@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiJson, isNetworkError } from "@/lib/api";
 import { uploadFoto } from "@/lib/cargas";
+import { readLastKnownKm, writeLastKnownKm } from "@/lib/lastKnownKm";
 import { Camera, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -123,6 +124,8 @@ interface NewLoadFormProps {
   defaultValues?: LoadData;
   driverName?: string;
   licensePlate?: string;
+  /** Tenant del chofer autenticado — particiona el cache local de último km (COMB-07-T6). */
+  empresaId: string;
   kmError?: string | null;
   onClearKmError?: () => void;
   /**
@@ -280,6 +283,7 @@ const NewLoadForm = ({
   defaultValues,
   driverName,
   licensePlate,
+  empresaId,
   kmError,
   onClearKmError,
   autoCalculatePrice = false,
@@ -384,8 +388,10 @@ const NewLoadForm = ({
     }
   }, [defaultValues, driverName, licensePlate]);
 
-  // Consultar el último km registrado para la patente ingresada
-  // Consultar el último km registrado para la patente ingresada
+  // Consultar el último km registrado para la patente ingresada. Semilla
+  // optimista desde el cache local (COMB-07-T6) antes de esperar la red: útil
+  // tanto sin conexión como con conexión lenta. El fetch de abajo la
+  // reemplaza con la respuesta real del servidor si tiene éxito.
   useEffect(() => {
     const plate = parsePatente(formData.licensePlate);
     const token = localStorage.getItem("vialtoToken");
@@ -393,6 +399,7 @@ const NewLoadForm = ({
       setPrevKmInfo(null);
       return;
     }
+    setPrevKmInfo(readLastKnownKm(empresaId, plate));
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -406,14 +413,16 @@ const NewLoadForm = ({
           async () => token,
         );
         setPrevKmInfo(data ?? null);
+        if (data) writeLastKnownKm(empresaId, plate, data);
       } catch {
-        setPrevKmInfo(null);
+        // Sin conexión (u otro error): se mantiene la referencia cacheada
+        // seteada arriba en vez de perderla.
       }
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [formData.licensePlate]);
+  }, [formData.licensePlate, empresaId]);
 
   // Precio por litro calculado automáticamente (COMB-03-T5, solo flujo
   // chofer): se deriva de monto ÷ litros en vez de dejarlo tipear a mano,

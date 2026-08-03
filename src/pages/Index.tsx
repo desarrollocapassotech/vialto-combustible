@@ -35,6 +35,7 @@ import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { logout } from "@/lib/auth";
 import { CargaApi, createCarga, resolveSyncError } from "@/lib/cargas";
 import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
+import { writeLastKnownKm } from "@/lib/lastKnownKm";
 import { extractApiErrorMessage, fmtMensajeError } from "@/lib/loadFormat";
 import {
   addPendingLoad,
@@ -138,6 +139,19 @@ const Index = () => {
   const rememberLastUsedPlate = (dni: number, patente: string) => {
     setLastUsedPlate(patente);
     writeLastUsedPlate(dni, patente);
+  };
+
+  // COMB-07-T6: junto con la patente, guarda el km/fecha de esta carga como
+  // referencia local para la próxima vez que se cargue este mismo vehículo
+  // (mismo criterio que rememberLastUsedPlate: es solo una referencia visual).
+  const rememberVehicleReference = (
+    dni: number,
+    patente: string,
+    km: number,
+    fecha: string,
+  ) => {
+    rememberLastUsedPlate(dni, patente);
+    if (empresaId) writeLastKnownKm(empresaId, patente, { km, fecha });
   };
 
   useEffect(() => {
@@ -265,7 +279,12 @@ const Index = () => {
     );
     setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
     if (created.vehiculo?.patente) {
-      rememberLastUsedPlate(pending.driverDni, created.vehiculo.patente);
+      rememberVehicleReference(
+        pending.driverDni,
+        created.vehiculo.patente,
+        created.km,
+        created.fecha,
+      );
     }
   };
 
@@ -570,7 +589,12 @@ const Index = () => {
               const created = await createCarga(apiPayload, getToken);
               setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
               if (created.vehiculo?.patente && userDni != null) {
-                rememberLastUsedPlate(userDni, created.vehiculo.patente);
+                rememberVehicleReference(
+                  userDni,
+                  created.vehiculo.patente,
+                  created.km,
+                  created.fecha,
+                );
               }
               toast.success("Carga registrada exitosamente");
             } catch (error) {
@@ -605,8 +629,13 @@ const Index = () => {
                   : { kind: "url", url: data.fotoTicket },
               });
               setPendingLoads((prev) => [...prev, pending]);
-              // COMB-07-T8: precarga la próxima carga de esta misma sesión offline.
-              rememberLastUsedPlate(userDni, apiPayload.patente);
+              // COMB-07-T8/T6: precarga patente y km de esta misma sesión offline.
+              rememberVehicleReference(
+                userDni,
+                apiPayload.patente,
+                apiPayload.km,
+                apiPayload.fecha,
+              );
               toast.success(
                 "Sin conexión: la carga se guardó en el dispositivo y se sincronizará más tarde.",
               );
@@ -974,6 +1003,7 @@ const Index = () => {
           }}
           defaultValues={editLoad}
           driverName={userName || ""}
+          empresaId={empresaId || ""}
           licensePlate={
             editLoad
               ? (editLoad.licensePlate ?? "")
