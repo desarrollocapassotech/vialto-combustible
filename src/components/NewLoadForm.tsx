@@ -291,6 +291,9 @@ const NewLoadForm = ({
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLicensePlateEnabled, setIsLicensePlateEnabled] = useState(false);
+  const [licensePlateError, setLicensePlateError] = useState<string | null>(
+    null,
+  );
   const [isStationSheetOpen, setIsStationSheetOpen] = useState(false);
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
 
@@ -382,6 +385,7 @@ const NewLoadForm = ({
       setFotoTacometroFile(null);
       setFotoTicketFile(null);
     }
+    setLicensePlateError(null);
   }, [defaultValues, driverName, licensePlate]);
 
   // Consultar el último km registrado para la patente ingresada
@@ -449,6 +453,15 @@ const NewLoadForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (hasDiscrepancy) return;
+
+    // El input arranca disabled (isLicensePlateEnabled), y un campo disabled
+    // no dispara la validación HTML5 required — por eso se valida acá.
+    if (!parsePatente(formData.licensePlate)) {
+      setLicensePlateError("Ingresá la patente del vehículo.");
+      setIsLicensePlateEnabled(true);
+      return;
+    }
+    setLicensePlateError(null);
 
     if (!formData.paymentMethod) {
       toast.error("El método de pago es obligatorio.");
@@ -863,7 +876,7 @@ const NewLoadForm = ({
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <label className="text-sm font-medium text-gray-700">
-                Patente del vehículo
+                Patente del vehículo <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
@@ -878,9 +891,13 @@ const NewLoadForm = ({
               return (
                 <div
                   className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${
-                    isMercosur
-                      ? "rounded-lg border-2 border-black"
-                      : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
+                    isMercosur ? "rounded-lg" : "rounded-xl"
+                  } border-2 ${
+                    licensePlateError
+                      ? "border-red-400"
+                      : isMercosur
+                        ? "border-black"
+                        : "border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
                   }`}
                 >
                   {/* Capa decorativa - diseño Mercosur (AB 123 CD) */}
@@ -967,14 +984,14 @@ const NewLoadForm = ({
                     }`}
                   >
                     <input
-                      required
                       value={formData.licensePlate}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setFormData({
                           ...formData,
                           licensePlate: formatPatente(e.target.value),
-                        })
-                      }
+                        });
+                        if (licensePlateError) setLicensePlateError(null);
+                      }}
                       inputMode="text"
                       autoCapitalize="characters"
                       disabled={!isLicensePlateEnabled}
@@ -989,6 +1006,11 @@ const NewLoadForm = ({
                 </div>
               );
             })()}
+            {licensePlateError && (
+              <p className="mt-1.5 text-sm text-red-600 font-medium text-center">
+                {licensePlateError}
+              </p>
+            )}
           </div>
 
           {/* Fotos Obligatorias (VTO-44) */}
