@@ -33,8 +33,10 @@ import NavBar from "@/components/NavBar";
 import { useEmpresaLogo } from "@/hooks/useEmpresaLogo";
 import { apiJson, ApiError, isNetworkError } from "@/lib/api";
 import { logout } from "@/lib/auth";
-import { CargaApi, createCarga } from "@/lib/cargas";
+import { CargaApi, createCarga, resolveSyncError } from "@/lib/cargas";
 import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
+import { writeLastKnownKm } from "@/lib/lastKnownKm";
+import { extractApiErrorMessage, fmtMensajeError } from "@/lib/loadFormat";
 import {
   addPendingLoad,
   deletePendingLoad,
@@ -91,7 +93,9 @@ function mapPendingToLoadData(p: PendingLoad): LoadData {
     empresaId: "",
     pending: true,
     pendingLocalId: p.localId,
-    syncError: p.lastError,
+    // p.lastError se guarda crudo (ver offlineSync.ts); se traduce recién acá, al
+    // mostrarlo — IndexedDB y el reporte al backend siguen con el texto original.
+    syncError: p.lastError ? fmtMensajeError(p.lastError) : p.lastError,
   } as LoadData;
 }
 
@@ -135,6 +139,19 @@ const Index = () => {
   const rememberLastUsedPlate = (dni: number, patente: string) => {
     setLastUsedPlate(patente);
     writeLastUsedPlate(dni, patente);
+  };
+
+  // COMB-07-T6: junto con la patente, guarda el km/fecha de esta carga como
+  // referencia local para la próxima vez que se cargue este mismo vehículo
+  // (mismo criterio que rememberLastUsedPlate: es solo una referencia visual).
+  const rememberVehicleReference = (
+    dni: number,
+    patente: string,
+    km: number,
+    fecha: string,
+  ) => {
+    rememberLastUsedPlate(dni, patente);
+    if (empresaId) writeLastKnownKm(empresaId, patente, { km, fecha });
   };
 
   useEffect(() => {
@@ -262,7 +279,12 @@ const Index = () => {
     );
     setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
     if (created.vehiculo?.patente) {
-      rememberLastUsedPlate(pending.driverDni, created.vehiculo.patente);
+      rememberVehicleReference(
+        pending.driverDni,
+        created.vehiculo.patente,
+        created.km,
+        created.fecha,
+      );
     }
   };
 
@@ -307,22 +329,28 @@ const Index = () => {
       handleLoadSynced(pending, created);
       toast.success("Carga sincronizada exitosamente");
     } catch (error) {
-      const isNetErr = isNetworkError(error);
-      const message = isNetErr
-        ? "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo."
-        : error instanceof ApiError && error.message
-          ? error.message
-          : "No se pudo sincronizar la carga.";
-      // Refleja acá lo que retryPendingLoad ya persistió en IndexedDB: marca
-      // el error, o lo deja sin marcar si fue un problema de red transitorio
-      // (para que la sincronización automática la retome sola al reconectar).
-      applyPendingLoadError(localId, isNetErr ? undefined : message);
-      toast.error(message);
+      if (isNetworkError(error)) {
+        // Sin marcar: la sincronización automática la retoma sola al reconectar.
+        applyPendingLoadError(localId, undefined);
+        toast.error(
+          "No se pudo conectar con el servidor. Verificá tu conexión e intentá de nuevo.",
+        );
+        return;
+      }
+      // Se guarda crudo (igual que ya hace retryPendingLoad en IndexedDB) y
+      // se traduce recién para el toast — mismo criterio que mapPendingToLoadData.
+      const rawMessage = extractApiErrorMessage(
+        error,
+        "No se pudo sincronizar la carga.",
+      );
+      applyPendingLoadError(localId, rawMessage);
+      toast.error(fmtMensajeError(rawMessage));
     }
   };
 
   // Eliminar una carga pendiente con error, a pedido del chofer (COMB-07-T4).
   const handleDeletePendingLoad = async (localId: string) => {
+    const pending = pendingLoads.find((p) => p.localId === localId);
     try {
       await deletePendingLoad(localId);
       setPendingLoads((prev) => prev.filter((p) => p.localId !== localId));
@@ -330,6 +358,24 @@ const Index = () => {
     } catch (error) {
       console.error("Error al eliminar la carga pendiente:", error);
       toast.error("No se pudo eliminar la carga");
+      return;
+    }
+
+    // Si tenía un error reportado, avisamos al backend para que la alerta
+    // deje de aparecerle al admin — best-effort: la carga ya se borró
+    // localmente, esto no debe bloquear ni reportarse como falla al chofer.
+    if (pending?.lastError) {
+      const token = localStorage.getItem("vialtoToken");
+      if (token) {
+        try {
+          await resolveSyncError(localId, async () => token);
+        } catch (error) {
+          console.error(
+            `No se pudo notificar al backend la eliminación de la carga con error ${localId}:`,
+            error,
+          );
+        }
+      }
     }
   };
 
@@ -543,7 +589,12 @@ const Index = () => {
               const created = await createCarga(apiPayload, getToken);
               setLoads((prev) => [mapCargaToLoadData(created), ...prev]);
               if (created.vehiculo?.patente && userDni != null) {
-                rememberLastUsedPlate(userDni, created.vehiculo.patente);
+                rememberVehicleReference(
+                  userDni,
+                  created.vehiculo.patente,
+                  created.km,
+                  created.fecha,
+                );
               }
               toast.success("Carga registrada exitosamente");
             } catch (error) {
@@ -578,8 +629,13 @@ const Index = () => {
                   : { kind: "url", url: data.fotoTicket },
               });
               setPendingLoads((prev) => [...prev, pending]);
-              // COMB-07-T8: precarga la próxima carga de esta misma sesión offline.
-              rememberLastUsedPlate(userDni, apiPayload.patente);
+              // COMB-07-T8/T6: precarga patente y km de esta misma sesión offline.
+              rememberVehicleReference(
+                userDni,
+                apiPayload.patente,
+                apiPayload.km,
+                apiPayload.fecha,
+              );
               toast.success(
                 "Sin conexión: la carga se guardó en el dispositivo y se sincronizará más tarde.",
               );
@@ -640,10 +696,9 @@ const Index = () => {
         return;
       }
       console.error("Error al manejar la carga:", error);
-      const msg =
-        error instanceof ApiError && error.message
-          ? error.message
-          : "Error al registrar o actualizar la carga";
+      const msg = fmtMensajeError(
+        extractApiErrorMessage(error, "Error al registrar o actualizar la carga"),
+      );
       const isKmError =
         typeof msg === "string" && msg.toLowerCase().includes("km");
       if (isKmError) {
@@ -948,6 +1003,7 @@ const Index = () => {
           }}
           defaultValues={editLoad}
           driverName={userName || ""}
+          empresaId={empresaId || ""}
           licensePlate={
             editLoad
               ? (editLoad.licensePlate ?? "")

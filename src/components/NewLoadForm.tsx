@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiJson, isNetworkError } from "@/lib/api";
 import { uploadFoto } from "@/lib/cargas";
+import { readLastKnownKm, writeLastKnownKm } from "@/lib/lastKnownKm";
 import { Camera, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -123,6 +124,8 @@ interface NewLoadFormProps {
   defaultValues?: LoadData;
   driverName?: string;
   licensePlate?: string;
+  /** Tenant del chofer autenticado — particiona el cache local de último km (COMB-07-T6). */
+  empresaId: string;
   kmError?: string | null;
   onClearKmError?: () => void;
   /**
@@ -280,6 +283,7 @@ const NewLoadForm = ({
   defaultValues,
   driverName,
   licensePlate,
+  empresaId,
   kmError,
   onClearKmError,
   autoCalculatePrice = false,
@@ -291,6 +295,9 @@ const NewLoadForm = ({
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLicensePlateEnabled, setIsLicensePlateEnabled] = useState(false);
+  const [licensePlateError, setLicensePlateError] = useState<string | null>(
+    null,
+  );
   const [isStationSheetOpen, setIsStationSheetOpen] = useState(false);
   const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
 
@@ -382,10 +389,13 @@ const NewLoadForm = ({
       setFotoTacometroFile(null);
       setFotoTicketFile(null);
     }
+    setLicensePlateError(null);
   }, [defaultValues, driverName, licensePlate]);
 
-  // Consultar el último km registrado para la patente ingresada
-  // Consultar el último km registrado para la patente ingresada
+  // Consultar el último km registrado para la patente ingresada. Semilla
+  // optimista desde el cache local (COMB-07-T6) antes de esperar la red: útil
+  // tanto sin conexión como con conexión lenta. El fetch de abajo la
+  // reemplaza con la respuesta real del servidor si tiene éxito.
   useEffect(() => {
     const plate = parsePatente(formData.licensePlate);
     const token = localStorage.getItem("vialtoToken");
@@ -393,6 +403,7 @@ const NewLoadForm = ({
       setPrevKmInfo(null);
       return;
     }
+    setPrevKmInfo(readLastKnownKm(empresaId, plate));
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -406,14 +417,16 @@ const NewLoadForm = ({
           async () => token,
         );
         setPrevKmInfo(data ?? null);
+        if (data) writeLastKnownKm(empresaId, plate, data);
       } catch {
-        setPrevKmInfo(null);
+        // Sin conexión (u otro error): se mantiene la referencia cacheada
+        // seteada arriba en vez de perderla.
       }
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [formData.licensePlate]);
+  }, [formData.licensePlate, empresaId]);
 
   // Precio por litro calculado automáticamente (COMB-03-T5, solo flujo
   // chofer): se deriva de monto ÷ litros en vez de dejarlo tipear a mano,
@@ -449,6 +462,15 @@ const NewLoadForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (hasDiscrepancy) return;
+
+    // El input arranca disabled (isLicensePlateEnabled), y un campo disabled
+    // no dispara la validación HTML5 required — por eso se valida acá.
+    if (!parsePatente(formData.licensePlate)) {
+      setLicensePlateError("Ingresá la patente del vehículo.");
+      setIsLicensePlateEnabled(true);
+      return;
+    }
+    setLicensePlateError(null);
 
     if (!formData.paymentMethod) {
       toast.error("El método de pago es obligatorio.");
@@ -557,7 +579,7 @@ const NewLoadForm = ({
           {/* Monto Total - estilo destacado */}
           <div className="rounded-xl bg-gray-50 p-4 border border-gray-200">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Monto Total
+              Monto Total <span className="text-red-500">*</span>
             </label>
             <Input
               required
@@ -642,7 +664,7 @@ const NewLoadForm = ({
           {/* Litros Cargados */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Litros Cargados
+              Litros Cargados <span className="text-red-500">*</span>
             </label>
             <Input
               required
@@ -677,7 +699,7 @@ const NewLoadForm = ({
           {!autoCalculatePrice && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Precio por Litro
+                Precio por Litro <span className="text-red-500">*</span>
               </label>
               <Input
                 required
@@ -763,7 +785,7 @@ const NewLoadForm = ({
           {/* Kilometros */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Kilómetros
+              Kilómetros <span className="text-red-500">*</span>
             </label>
             <Input
               required
@@ -863,7 +885,7 @@ const NewLoadForm = ({
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <label className="text-sm font-medium text-gray-700">
-                Patente del vehículo
+                Patente del vehículo <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
@@ -878,9 +900,13 @@ const NewLoadForm = ({
               return (
                 <div
                   className={`relative overflow-hidden aspect-[2.8/1] w-full max-w-sm mx-auto shadow-md ${
-                    isMercosur
-                      ? "rounded-lg border-2 border-black"
-                      : "rounded-xl border-2 border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
+                    isMercosur ? "rounded-lg" : "rounded-xl"
+                  } border-2 ${
+                    licensePlateError
+                      ? "border-red-400"
+                      : isMercosur
+                        ? "border-black"
+                        : "border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200"
                   }`}
                 >
                   {/* Capa decorativa - diseño Mercosur (AB 123 CD) */}
@@ -967,14 +993,14 @@ const NewLoadForm = ({
                     }`}
                   >
                     <input
-                      required
                       value={formData.licensePlate}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setFormData({
                           ...formData,
                           licensePlate: formatPatente(e.target.value),
-                        })
-                      }
+                        });
+                        if (licensePlateError) setLicensePlateError(null);
+                      }}
                       inputMode="text"
                       autoCapitalize="characters"
                       disabled={!isLicensePlateEnabled}
@@ -989,6 +1015,11 @@ const NewLoadForm = ({
                 </div>
               );
             })()}
+            {licensePlateError && (
+              <p className="mt-1.5 text-sm text-red-600 font-medium text-center">
+                {licensePlateError}
+              </p>
+            )}
           </div>
 
           {/* Fotos Obligatorias (VTO-44) */}
