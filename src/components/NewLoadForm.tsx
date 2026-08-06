@@ -409,6 +409,7 @@ const NewLoadForm = ({
       try {
         const qs = new URLSearchParams({ patente: plate });
         if (defaultValues?.id) qs.set("excludeId", defaultValues.id);
+        qs.set("fecha", formData.date.toISOString());
 
         qs.set("_t", Date.now().toString());
 
@@ -417,7 +418,9 @@ const NewLoadForm = ({
           async () => token,
         );
         setPrevKmInfo(data ?? null);
-        if (data) writeLastKnownKm(empresaId, plate, data);
+        if (data && !defaultValues) {
+          writeLastKnownKm(empresaId, plate, data);
+        }
       } catch {
         // Sin conexión (u otro error): se mantiene la referencia cacheada
         // seteada arriba en vez de perderla.
@@ -426,7 +429,7 @@ const NewLoadForm = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [formData.licensePlate, empresaId]);
+  }, [formData.licensePlate, empresaId, formData.date]);
 
   // Precio por litro calculado automáticamente (COMB-03-T5, solo flujo
   // chofer): se deriva de monto ÷ litros en vez de dejarlo tipear a mano,
