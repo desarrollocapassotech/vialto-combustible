@@ -625,7 +625,7 @@ const NewLoadForm = ({
             <div
               role="group"
               aria-label="Método de pago"
-              className="grid grid-cols-2 gap-2"
+              className="grid grid-cols-3 gap-2"
             >
               <button
                 type="button"
@@ -652,6 +652,19 @@ const NewLoadForm = ({
                 }`}
               >
                 Tarjeta
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData({ ...formData, paymentMethod: "CUENTA_CORRIENTE" })
+                }
+                className={`min-h-[52px] rounded-xl text-base font-medium touch-manipulation transition-colors border-2 ${
+                  formData.paymentMethod === "CUENTA_CORRIENTE"
+                    ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                }`}
+              >
+                Cta. Corriente
               </button>
             </div>
             {!formData.paymentMethod && (
