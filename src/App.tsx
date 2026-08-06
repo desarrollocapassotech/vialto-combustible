@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PublicRoute from "./components/PublicRoute";
 import LoginAdmin from "./pages/LoginAdmin";
 import Login from "./pages/Login";
 import DriverManagement from "./pages/DriverManagement";
@@ -14,11 +15,6 @@ import EmpresaConfig from "./pages/EmpresaConfig";
 
 const queryClient = new QueryClient();
 
-// Función auxiliar para saber si el usuario ya tiene sesión activa
-const isAuthenticated = () => {
-  return !!localStorage.getItem("vialtoToken");
-};
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -27,23 +23,25 @@ const App = () => (
           <Route
             path="/"
             element={
-              <Navigate to={isAuthenticated() ? "/inicio" : "/login"} replace />
+              <PublicRoute>
+                <Navigate to="/login" replace />
+              </PublicRoute>
             }
           />
           <Route
             path="/login"
             element={
-              isAuthenticated() ? <Navigate to="/inicio" replace /> : <Login />
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
             }
           />
           <Route
             path="/login-administrador"
             element={
-              isAuthenticated() ? (
-                <Navigate to="/inicio" replace />
-              ) : (
+              <PublicRoute>
                 <LoginAdmin />
-              )
+              </PublicRoute>
             }
           />
 
