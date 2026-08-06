@@ -1,16 +1,18 @@
 ## Arquitectura del proyecto
 
-> **Este repo NO es código descartable.** Hoy es una SPA standalone sobre **Firebase** (Auth + Firestore + Storage) para el cliente Bressan, sin Clerk ni Prisma — eso sí es legacy. Pero la dirección del proyecto es **migrar este mismo repo al stack nuevo** (el de `vialto-frontend`/`vialto-backend`), para que se convierta en la **app mobile-first dedicada a choferes** de Vialto: login y operaciones vía la API de `vialto-backend` en vez de Firebase directo.
+> **Este repo NO es código descartable.** Es una SPA (Vite + shadcn + Tailwind) para el cliente Bressan, en **migración parcial en curso** desde **Firebase** (Auth + Firestore + Storage) hacia el stack nuevo (el de `vialto-frontend`/`vialto-backend`), para convertirse en la **app mobile-first dedicada a choferes** de Vialto.
 >
-> El backend ya tiene la mitad de esa integración construida y esperando: `core/chofer-auth/` (login por DNI+PIN, JWT propio — los choferes no tienen cuenta Clerk) y `modules/combustible/chofer-combustible.controller.ts` (API de cargas de combustible gateada por ese JWT, paralela a la que usa el resto del SaaS). Cualquier trabajo de migración de este repo apunta a consumir esos endpoints, no a reinventar una API propia.
+> **El flujo del rol `CHOFER` ya está migrado**: login (`POST /api/auth/chofer-login`, JWT propio vía `core/chofer-auth/` — los choferes no tienen cuenta Clerk) y alta/edición/baja de cargas de combustible (`lib/cargas.ts` → `modules/combustible/chofer-combustible.controller.ts` en `vialto-backend`) van contra la API del backend nuevo y quedan en Postgres, no en Firestore. Ver `Index.tsx` (`handleSubmit`/`handleDeleteLoad`, rama `userRole === "CHOFER"`).
+>
+> **Lo que sigue en Firestore** es el flujo `ADMIN`/`SUPER_ADMIN` dentro de este mismo repo — el código lo marca explícito (`Index.tsx`: `// ADMIN / SUPER_ADMIN: Firestore (pendiente de migración)`): alta/edición/baja de cargas hechas por un admin desde esta app, y toda la gestión de empresas/usuarios (`EmpresasManagement.tsx`, `UserManagement.tsx`, `RegisterEmpresa.tsx`, `EmpresaConfig.tsx`, `LoginAdmin.tsx`).
 >
 > El `CLAUDE.md` de `vialto-backend` sigue siendo la fuente de verdad del producto/roadmap general (incluida la arquitectura de `chofer-auth` y del módulo `combustible`). Este archivo documenta solo el estado y las reglas específicas de **este** repo mientras dura la migración.
 
 ---
 
-## Qué es este repo hoy (estado actual, pre-migración)
+## Qué es este repo hoy (estado actual, migración parcial)
 
-App React (Vite + shadcn + Tailwind) que permite a choferes registrar cargas de combustible y a administradores gestionar choferes/empresas, con Firebase como único backend (sin API propia salvo el script `create-superadmin`). Es multi-empresa a nivel Firestore (colecciones `empresas`, `usuarios`, `cargas`, ver [MIGRACION.md](./MIGRACION.md)).
+App React (Vite + shadcn + Tailwind) donde los choferes registran cargas de combustible vía la API de `vialto-backend` (ya migrado, ver arriba) y los administradores gestionan choferes/empresas/cargas-propias vía Firebase (pendiente de migrar). Multi-empresa a nivel Firestore para lo que sigue ahí (colecciones `empresas`, `usuarios`, `cargas`, ver [MIGRACION.md](./MIGRACION.md)).
 
 ### Reglas absolutas mientras el repo siga en Firebase
 
@@ -23,22 +25,23 @@ App React (Vite + shadcn + Tailwind) que permite a choferes registrar cargas de 
 
 ```txt
 src/
-  pages/        # Login, LoginAdmin, Index (carga), gestión choferes/empresas, config de empresa
+  pages/        # Login (chofer, backend nuevo), LoginAdmin, Index (carga), gestión choferes/empresas, config de empresa
   components/   # NavBar, ProtectedRoute, formularios de carga, exportación, UI (shadcn)
-  converters/   # Mapeo Firestore <-> tipos TS (empresaConverter, userConverter, loadConverter)
+  converters/   # Mapeo Firestore <-> tipos TS (empresaConverter, userConverter, loadConverter) — solo para lo que sigue en Firestore
   types/        # Empresa, Usuario, Carga
   hooks/        # useEmpresaLogo, use-toast, use-mobile
-  lib/          # api.ts, utils.ts
-  firebase.js   # inicialización de Firebase (config hardcodeada)
+  lib/          # api.ts (cliente HTTP a vialto-backend), cargas.ts (alta/fotos/sync-errors del chofer), auth.ts, offlineQueue.ts/offlineSync.ts (cola offline del chofer), utils.ts
+  firebase.js   # inicialización de Firebase (config hardcodeada) — usado por lo que sigue sin migrar
 ```
 
-### Hacia dónde va (migración al stack nuevo)
+### Qué falta migrar
 
-- **Destino:** app mobile-first dedicada a choferes, consumiendo `vialto-backend` en vez de Firebase directo.
-- **Auth:** login DNI+PIN vía `POST auth/chofer-login` (`core/chofer-auth`), JWT propio — no Clerk, porque los choferes no son usuarios de organización.
-- **Datos:** cargas de combustible vía `chofer-combustible.controller.ts`, ya implementado y activo en el backend, pensado justo para este caso de uso.
-- **Convenciones de código:** al migrar componentes/páginas, seguir los patrones de `vialto-frontend` (capa `lib/api.ts` centralizada, tipado en `types/`, componentes chicos por responsabilidad) en vez de mantener el estilo actual atado a Firestore.
-- Este repo sigue siendo el sistema en producción para Bressan hasta que la migración esté lista — no romper el flujo actual mientras se construye el nuevo.
+El flujo del chofer (login + CRUD de cargas, incluida la cola offline) ya está en el stack nuevo. Lo pendiente es el flujo `ADMIN`/`SUPER_ADMIN` de este mismo repo:
+
+- Alta/edición/baja de cargas hechas por un admin desde `Index.tsx` (hoy Firestore directo).
+- Gestión de empresas (`EmpresasManagement.tsx`, `RegisterEmpresa.tsx`, `EmpresaConfig.tsx`) y usuarios (`UserManagement.tsx`), y el login de admin (`LoginAdmin.tsx`).
+- **Convenciones al migrar lo que falta:** seguir los patrones ya usados en el flujo del chofer (`lib/api.ts` centralizado, tipado en `types/`, componentes chicos por responsabilidad) en vez de mantener el estilo atado a Firestore.
+- No romper el flujo Firestore actual mientras se migra: sigue siendo el camino real para admins hasta que se reemplace.
 
 ---
 
