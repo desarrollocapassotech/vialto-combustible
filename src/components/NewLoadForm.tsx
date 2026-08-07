@@ -315,7 +315,7 @@ const NewLoadForm = ({
   const [formData, setFormData] = useState({
     driverName: driverName || "",
     licensePlate: licensePlate || "",
-    serviceStation: defaultValues?.serviceStation || "YPF",
+    serviceStation: defaultValues?.serviceStation || "YPF EN RUTA",
     liters: "",
     pricePerLiter: "",
     totalAmount: "",
@@ -333,7 +333,7 @@ const NewLoadForm = ({
       setFormData({
         driverName: defaultValues.driverName,
         licensePlate: formatPatente(defaultValues.licensePlate || ""),
-        serviceStation: defaultValues.serviceStation || "YPF",
+        serviceStation: defaultValues.serviceStation || "YPF EN RUTA",
         liters: formatAmountFromNumber(
           typeof defaultValues.liters === "number"
             ? defaultValues.liters
@@ -376,7 +376,7 @@ const NewLoadForm = ({
       setFormData({
         driverName: driverName || "",
         licensePlate: formatPatente(licensePlate || ""),
-        serviceStation: "YPF",
+        serviceStation: "YPF EN RUTA",
         liters: "",
         pricePerLiter: "",
         totalAmount: "",
@@ -774,7 +774,16 @@ const NewLoadForm = ({
                   <SheetTitle>Estación de Servicio</SheetTitle>
                 </SheetHeader>
                 <div className="grid grid-cols-2 gap-2 mt-6 pb-8">
-                  {["YPF", "GOTTIG", "AGRO", "AXION", "LA PAZ", "OTRA"].map(
+                  {[
+                    "YPF EN RUTA",
+                    "GOTTIG",
+                    "AGRO",
+                    "AXION",
+                    "LA PAZ",
+                    "SHELL FLOTA",
+                    "AXION CARD",
+                    "OTRA",
+                  ].map(
                     (station) => (
                       <button
                         key={station}
