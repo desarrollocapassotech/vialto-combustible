@@ -315,7 +315,7 @@ const NewLoadForm = ({
   const [formData, setFormData] = useState({
     driverName: driverName || "",
     licensePlate: licensePlate || "",
-    serviceStation: defaultValues?.serviceStation || "YPF",
+    serviceStation: defaultValues?.serviceStation || "YPF EN RUTA",
     liters: "",
     pricePerLiter: "",
     totalAmount: "",
@@ -333,7 +333,7 @@ const NewLoadForm = ({
       setFormData({
         driverName: defaultValues.driverName,
         licensePlate: formatPatente(defaultValues.licensePlate || ""),
-        serviceStation: defaultValues.serviceStation || "YPF",
+        serviceStation: defaultValues.serviceStation || "YPF EN RUTA",
         liters: formatAmountFromNumber(
           typeof defaultValues.liters === "number"
             ? defaultValues.liters
@@ -376,7 +376,7 @@ const NewLoadForm = ({
       setFormData({
         driverName: driverName || "",
         licensePlate: formatPatente(licensePlate || ""),
-        serviceStation: "YPF",
+        serviceStation: "YPF EN RUTA",
         liters: "",
         pricePerLiter: "",
         totalAmount: "",
@@ -409,6 +409,7 @@ const NewLoadForm = ({
       try {
         const qs = new URLSearchParams({ patente: plate });
         if (defaultValues?.id) qs.set("excludeId", defaultValues.id);
+        qs.set("fecha", formData.date.toISOString());
 
         qs.set("_t", Date.now().toString());
 
@@ -417,7 +418,9 @@ const NewLoadForm = ({
           async () => token,
         );
         setPrevKmInfo(data ?? null);
-        if (data) writeLastKnownKm(empresaId, plate, data);
+        if (data && !defaultValues) {
+          writeLastKnownKm(empresaId, plate, data);
+        }
       } catch {
         // Sin conexión (u otro error): se mantiene la referencia cacheada
         // seteada arriba en vez de perderla.
@@ -426,7 +429,7 @@ const NewLoadForm = ({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [formData.licensePlate, empresaId]);
+  }, [formData.licensePlate, empresaId, formData.date]);
 
   // Precio por litro calculado automáticamente (COMB-03-T5, solo flujo
   // chofer): se deriva de monto ÷ litros en vez de dejarlo tipear a mano,
@@ -771,7 +774,16 @@ const NewLoadForm = ({
                   <SheetTitle>Estación de Servicio</SheetTitle>
                 </SheetHeader>
                 <div className="grid grid-cols-2 gap-2 mt-6 pb-8">
-                  {["YPF", "GOTTIG", "AGRO", "AXION", "LA PAZ", "OTRA"].map(
+                  {[
+                    "YPF EN RUTA",
+                    "GOTTIG",
+                    "AGRO",
+                    "AXION",
+                    "LA PAZ",
+                    "SHELL FLOTA",
+                    "AXION CARD",
+                    "OTRA",
+                  ].map(
                     (station) => (
                       <button
                         key={station}
