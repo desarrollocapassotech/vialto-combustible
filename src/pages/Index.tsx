@@ -8,7 +8,9 @@ import ExportData from "@/components/ExportData";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Truck, Calendar, Building2 } from "lucide-react";
+import { PlusCircle, Truck, Calendar, Building2, Wrench } from "lucide-react";
+import { NewServiceForm } from "@/components/NewServiceForm";
+import { ContextoMantenimiento, getContextoMantenimiento } from "@/lib/mantenimiento";
 import { auth, db } from "@/firebase";
 import { useNavigate } from "react-router-dom";
 import {
@@ -153,6 +155,8 @@ const Index = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthValue);
   const [formKey, setFormKey] = useState(0); // <-- ESTADO AGREGADO
   const [pendingLoads, setPendingLoads] = useState<PendingLoad[]>([]);
+  const [contextoMant, setContextoMant] = useState<ContextoMantenimiento | null>(null);
+  const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [sortBy, setSortBy] = useState<CombustibleSortField>(
     COMBUSTIBLE_SORT_DEFAULT.sortBy,
   );
@@ -275,6 +279,20 @@ const Index = () => {
       })
       .catch(() => { });
   }, [userRole, userDni]);
+
+  // Mantenimiento: si la empresa lo tiene y el chofer tiene vehículo asignado, puede registrar un service.
+  const cargarContextoMant = async () => {
+    const token = localStorage.getItem("vialtoToken");
+    if (!token || !navigator.onLine) return;
+    try {
+      setContextoMant(await getContextoMantenimiento(async () => token));
+    } catch {
+      setContextoMant(null); // sin el botón; no bloquea las cargas
+    }
+  };
+  useEffect(() => {
+    if (userRole === "CHOFER") void cargarContextoMant();
+  }, [userRole]);
 
   useEffect(() => {
     if (userRole !== "CHOFER" || userDni == null) {
@@ -928,9 +946,9 @@ const Index = () => {
               </div>
             )}
 
-          {/* Botón nueva carga (solo CHOFER) */}
+          {/* Botón nueva carga (solo CHOFER) + registrar service si la empresa tiene Mantenimiento */}
           {userRole === "CHOFER" && (
-            <div className="flex flex-wrap items-center gap-3 justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={() => {
                   setEditLoad(null);
@@ -941,6 +959,16 @@ const Index = () => {
                 <PlusCircle size={20} className="mr-2" />
                 Nueva Carga
               </Button>
+              {contextoMant?.habilitado && contextoMant.vehiculo && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsServiceOpen(true)}
+                  className="w-full sm:w-auto border-[#E8470A] text-[#E8470A] hover:bg-[#E8470A]/10 hover:text-[#E8470A]"
+                >
+                  <Wrench size={20} className="mr-2" />
+                  Registrar service
+                </Button>
+              )}
             </div>
           )}
 
@@ -1073,6 +1101,21 @@ const Index = () => {
           onClearKmError={() => setKmError(null)}
           autoCalculatePrice={userRole === "CHOFER"}
         />
+      </Dialog>
+
+      {/* Diálogo de service (Mantenimiento) */}
+      <Dialog open={isServiceOpen} onOpenChange={setIsServiceOpen}>
+        {isServiceOpen && contextoMant?.vehiculo && (
+          <NewServiceForm
+            contexto={{ ...contextoMant, vehiculo: contextoMant.vehiculo }}
+            getToken={async () => localStorage.getItem("vialtoToken")}
+            onCancel={() => setIsServiceOpen(false)}
+            onDone={() => {
+              setIsServiceOpen(false);
+              void cargarContextoMant(); // el km actual cambió
+            }}
+          />
+        )}
       </Dialog>
 
       {/* Diálogo de vista (detalle de una carga, con acceso a editar) */}
