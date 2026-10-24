@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import NewLoadForm from "@/components/NewLoadForm";
@@ -8,8 +8,9 @@ import ExportData from "@/components/ExportData";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Truck, Calendar, Building2, Wrench } from "lucide-react";
+import { PlusCircle, Truck, Calendar, Building2, Wrench, Fuel } from "lucide-react";
 import { NewServiceForm } from "@/components/NewServiceForm";
+import ServiceHistory from "@/components/ServiceHistory";
 import { ContextoMantenimiento, getContextoMantenimiento } from "@/lib/mantenimiento";
 import { auth, db } from "@/firebase";
 import { useNavigate } from "react-router-dom";
@@ -157,6 +158,10 @@ const Index = () => {
   const [pendingLoads, setPendingLoads] = useState<PendingLoad[]>([]);
   const [contextoMant, setContextoMant] = useState<ContextoMantenimiento | null>(null);
   const [isServiceOpen, setIsServiceOpen] = useState(false);
+  const [historialTab, setHistorialTab] = useState<"cargas" | "services">("cargas");
+  const [recargaServices, setRecargaServices] = useState(0);
+  // Estable entre renders: ServiceHistory lo usa como dependencia del fetch.
+  const getChoferToken = useCallback(async () => localStorage.getItem("vialtoToken"), []);
   const [sortBy, setSortBy] = useState<CombustibleSortField>(
     COMBUSTIBLE_SORT_DEFAULT.sortBy,
   );
@@ -293,6 +298,7 @@ const Index = () => {
   useEffect(() => {
     if (userRole === "CHOFER") void cargarContextoMant();
   }, [userRole]);
+  const conServices = userRole === "CHOFER" && !!contextoMant?.habilitado;
 
   useEffect(() => {
     if (userRole !== "CHOFER" || userDni == null) {
@@ -998,8 +1004,39 @@ const Index = () => {
           {(userRole !== "SUPER_ADMIN" || empresaId) && (
             <div id="historial" className="bg-white rounded-lg shadow-md p-4">
               <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                Historial de Cargas
+                {conServices ? "Historial" : "Historial de Cargas"}
               </h2>
+              {/* Con Mantenimiento: pestañas Cargas / Services (mismo control segmentado que "Método de pago"). */}
+              {conServices && (
+                <div role="tablist" aria-label="Historial" className="mb-4 grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      ["cargas", "Cargas", Fuel],
+                      ["services", "Services", Wrench],
+                    ] as const
+                  ).map(([id, label, Icono]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={historialTab === id}
+                      onClick={() => setHistorialTab(id)}
+                      className={`flex min-h-[48px] items-center justify-center gap-2 rounded-xl border-2 text-base font-medium touch-manipulation transition-colors ${
+                        historialTab === id
+                          ? "border-[#E8470A] bg-[#E8470A]/10 text-[#E8470A]"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 active:bg-gray-50"
+                      }`}
+                    >
+                      <Icono size={18} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {conServices && historialTab === "services" ? (
+                <ServiceHistory getToken={getChoferToken} recarga={recargaServices} />
+              ) : (
+              <>
               {userRole === "CHOFER" && (
                 <div className="mb-4 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
                   <div className="w-full sm:w-auto">
@@ -1065,6 +1102,8 @@ const Index = () => {
                 onRetryPending={handleRetryPendingLoad}
                 onDeletePending={handleDeletePendingLoad}
               />
+              </>
+              )}
             </div>
           )}
         </motion.div>
@@ -1113,6 +1152,7 @@ const Index = () => {
             onDone={() => {
               setIsServiceOpen(false);
               void cargarContextoMant(); // el km actual cambió
+              setRecargaServices((n) => n + 1);
             }}
           />
         )}

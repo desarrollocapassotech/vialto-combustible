@@ -55,6 +55,27 @@ export interface ServiceRegistrado {
   warning: string | null;
 }
 
+/** Un service que registró el chofer (`GET mantenimiento/chofer/services`). */
+export interface ServiceChofer {
+  id: string;
+  numero: number;
+  /** Día del service (medianoche UTC). */
+  fecha: string;
+  km: number | null;
+  estado: string;
+  patente: string;
+  taller: string | null;
+  planes: string[];
+  /** Ya traducidas ("Cambio de aceite de motor"). */
+  tareas: string[];
+  descripcion: string | null;
+  adjuntos: string[];
+}
+
+export function getMisServices(getToken: TokenGetter) {
+  return apiJson<ServiceChofer[]>("/api/mantenimiento/chofer/services", getToken);
+}
+
 export function getContextoMantenimiento(getToken: TokenGetter) {
   return apiJson<ContextoMantenimiento>("/api/mantenimiento/chofer/contexto", getToken);
 }
