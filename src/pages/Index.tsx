@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import NewLoadForm from "@/components/NewLoadForm";
@@ -39,6 +39,7 @@ import { logout } from "@/lib/auth";
 import { CargaApi, createCarga, resolveSyncError } from "@/lib/cargas";
 import { readLastUsedPlate, writeLastUsedPlate } from "@/lib/lastUsedPlate";
 import { writeLastKnownKm } from "@/lib/lastKnownKm";
+import { clearLoadDraft, loadDraftKey, readLoadDraft } from "@/lib/loadDraft";
 import { extractApiErrorMessage, fmtMensajeError } from "@/lib/loadFormat";
 import {
   addPendingLoad,
@@ -260,6 +261,32 @@ const Index = () => {
 
     fetchUserRole();
   }, [navigate]);
+
+  // Borrador de carga nueva del chofer (lib/loadDraft.ts): si Chrome recargó
+  // la página con el formulario a medio completar (p. ej. Android mató la
+  // pestaña al abrir la cámara), se reabre el formulario con lo ya cargado.
+  const draftKey =
+    userRole === "CHOFER" && userDni != null
+      ? loadDraftKey(empresaId, userDni)
+      : undefined;
+  const draftCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!draftKey || draftCheckedRef.current) return;
+    draftCheckedRef.current = true;
+    readLoadDraft(draftKey)
+      .then((draft) => {
+        if (!draft) return;
+        setEditLoad(null);
+        setIsFormOpen(true);
+        toast.info("Recuperamos la carga que estabas completando.");
+      })
+      .catch(() => undefined);
+  }, [draftKey]);
+  // Se espera el borrado antes de remontar el form (formKey): si no, la nueva
+  // instancia podría leer el borrador viejo antes de que se borre.
+  const discardLoadDraft = async () => {
+    if (draftKey) await clearLoadDraft(draftKey).catch(() => undefined);
+  };
 
   // COMB-07-T8: precarga offline; el fetch online de abajo la sobreescribe si hay conexión.
   useEffect(() => {
@@ -721,6 +748,8 @@ const Index = () => {
               return;
             }
           }
+          // Alta nueva registrada (online o en la cola offline): ya no hace falta el borrador.
+          await discardLoadDraft();
           setKmError(null);
         }
         setIsFormOpen(false);
@@ -1123,11 +1152,18 @@ const Index = () => {
         <NewLoadForm
           key={formKey} // <-- KEY AGREGADA ACÁ
           onSubmit={handleNewLoad}
-          onCancel={() => {
+          onCancel={async () => {
             setIsFormOpen(false);
+            // "Cancelar" explícito en un alta del chofer descarta el borrador
+            // y limpia el form; cerrar tocando afuera / atrás lo conserva.
+            if (!editLoad && draftKey) {
+              await discardLoadDraft();
+              setFormKey((prev) => prev + 1);
+            }
             setEditLoad(null);
             setKmError(null);
           }}
+          draftKey={editLoad ? undefined : draftKey}
           defaultValues={editLoad}
           driverName={userName || ""}
           empresaId={empresaId || ""}
