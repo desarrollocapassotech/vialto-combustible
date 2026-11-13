@@ -3,6 +3,7 @@ import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { compressImage } from "@/lib/imageCompression";
+import { InAppCamera, isInAppCameraSupported } from "@/components/InAppCamera";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
@@ -25,6 +26,7 @@ export function FotosServiceField({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   // Previews: se recalculan con la lista y se revocan al cambiar (no acumular "blob:" huérfanos).
   const previews = useMemo(() => fotos.map((f) => URL.createObjectURL(f)), [fotos]);
@@ -128,7 +130,9 @@ export function FotosServiceField({
               type="button"
               onClick={() => {
                 setIsSourceSheetOpen(false);
-                cameraInputRef.current?.click();
+                // Cámara in-page para que Chrome no quede en segundo plano (ver InAppCamera).
+                if (isInAppCameraSupported()) setIsCameraOpen(true);
+                else cameraInputRef.current?.click();
               }}
               className="min-h-[88px] rounded-xl border-2 border-gray-200 bg-white text-gray-600 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-colors flex items-center gap-4 px-4 touch-manipulation"
             >
@@ -153,6 +157,20 @@ export function FotosServiceField({
           </div>
         </SheetContent>
       </Sheet>
+
+      {isCameraOpen && (
+        <InAppCamera
+          onCapture={(file) => {
+            setIsCameraOpen(false);
+            onChange([...fotos, file]);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+          onUnavailable={() => {
+            setIsCameraOpen(false);
+            cameraInputRef.current?.click();
+          }}
+        />
+      )}
     </div>
   );
 }

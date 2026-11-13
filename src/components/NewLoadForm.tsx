@@ -8,6 +8,13 @@ import {
 import { apiJson, isNetworkError } from "@/lib/api";
 import { uploadFoto } from "@/lib/cargas";
 import { compressImage } from "@/lib/imageCompression";
+import { InAppCamera, isInAppCameraSupported } from "@/components/InAppCamera";
+import {
+  clearLoadDraft,
+  isDraftMeaningful,
+  readLoadDraft,
+  saveLoadDraft,
+} from "@/lib/loadDraft";
 import { readLastKnownKm, writeLastKnownKm } from "@/lib/lastKnownKm";
 import { Camera, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -135,6 +142,11 @@ interface NewLoadFormProps {
    * editable manualmente, comportamiento sin cambios — panel de administración.
    */
   autoCalculatePrice?: boolean;
+  /**
+   * Si viene, el formulario se guarda como borrador en IndexedDB y se
+   * restaura al montar (ver lib/loadDraft.ts). Solo para alta nueva del chofer.
+   */
+  draftKey?: string;
 }
 
 interface PhotoUploaderProps {
@@ -159,6 +171,13 @@ const PhotoUploader = ({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [isSourceSheetOpen, setIsSourceSheetOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+
+  const openCamera = () => {
+    // Cámara in-page para que Chrome no quede en segundo plano (ver InAppCamera).
+    if (isInAppCameraSupported()) setIsCameraOpen(true);
+    else cameraInputRef.current?.click();
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -264,7 +283,7 @@ const PhotoUploader = ({
               type="button"
               onClick={() => {
                 setIsSourceSheetOpen(false);
-                cameraInputRef.current?.click();
+                openCamera();
               }}
               className="min-h-[88px] rounded-xl border-2 border-gray-200 bg-white text-gray-600 hover:border-[#E8470A] hover:bg-[#E8470A]/5 active:bg-[#E8470A]/10 transition-colors flex items-center gap-4 px-4 touch-manipulation"
             >
@@ -293,6 +312,20 @@ const PhotoUploader = ({
           </div>
         </SheetContent>
       </Sheet>
+
+      {isCameraOpen && (
+        <InAppCamera
+          onCapture={(file) => {
+            setIsCameraOpen(false);
+            onFileSelect(file);
+          }}
+          onClose={() => setIsCameraOpen(false)}
+          onUnavailable={() => {
+            setIsCameraOpen(false);
+            cameraInputRef.current?.click();
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -307,6 +340,7 @@ const NewLoadForm = ({
   kmError,
   onClearKmError,
   autoCalculatePrice = false,
+  draftKey,
 }: NewLoadFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prevKmInfo, setPrevKmInfo] = useState<{
@@ -346,6 +380,67 @@ const NewLoadForm = ({
       ? String(defaultValues.paymentMethod).toUpperCase()
       : null,
   });
+
+  // Borrador (lib/loadDraft.ts): restaurar al montar y guardar al cambiar.
+  const draftRestoredRef = useRef(false);
+  const [draftReady, setDraftReady] = useState(!draftKey);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    let cancelled = false;
+    // draftKey puede llegar después del primer render (Index resuelve el
+    // usuario async): no guardar nada hasta terminar de leer el borrador.
+    setDraftReady(false);
+    readLoadDraft(draftKey)
+      .then((draft) => {
+        if (cancelled || !draft) return;
+        draftRestoredRef.current = true;
+        const parsedDate = new Date(draft.fields.date);
+        setFormData({
+          ...draft.fields,
+          date: Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate,
+        });
+        if (draft.fotoTacometro) {
+          setFotoTacometroFile(draft.fotoTacometro);
+          setFotoTacometroPreview(URL.createObjectURL(draft.fotoTacometro));
+        }
+        if (draft.fotoTicket) {
+          setFotoTicketFile(draft.fotoTicket);
+          setFotoTicketPreview(URL.createObjectURL(draft.fotoTicket));
+        }
+      })
+      .catch(() => undefined) // sin IndexedDB: el form funciona igual, sin borrador
+      .finally(() => {
+        if (!cancelled) setDraftReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!draftKey || !draftReady || isSubmitting) return;
+    const timer = setTimeout(() => {
+      const fields = { ...formData, date: formData.date.toISOString() };
+      const op = isDraftMeaningful(fields, fotoTacometroFile, fotoTicketFile)
+        ? saveLoadDraft({
+            key: draftKey,
+            fields,
+            fotoTacometro: fotoTacometroFile,
+            fotoTicket: fotoTicketFile,
+          })
+        : clearLoadDraft(draftKey);
+      op.catch(() => undefined);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [
+    draftKey,
+    draftReady,
+    isSubmitting,
+    formData,
+    fotoTacometroFile,
+    fotoTicketFile,
+  ]);
 
   // Inicializar el formulario con los valores por defecto si existen
   useEffect(() => {
@@ -392,7 +487,9 @@ const NewLoadForm = ({
       setFotoTicketPreview(defaultValues.fotoTicket || null);
       setFotoTacometroFile(null);
       setFotoTicketFile(null);
-    } else {
+    } else if (!draftRestoredRef.current) {
+      // Si ya se restauró un borrador, no pisarlo cuando llega tarde la
+      // patente por defecto (lastUsedPlate se resuelve async en Index).
       setFormData({
         driverName: driverName || "",
         licensePlate: formatPatente(licensePlate || ""),
